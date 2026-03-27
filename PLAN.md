@@ -269,6 +269,60 @@ The lock list in config is never modified; the approval lives only in the pairin
 
 ---
 
+## Attachment Matching (completed out of phase, added during live testing)
+**Goal:** Use streams already attached to a channel as the primary match signal,
+not just the channel name. More robust than name-only matching — survives channel renames.
+
+- [x] `core/planner.py` — `_build_attachment_index`: maps `normalized_stream_name → channel`
+  from each channel's current `stream_ids`; sanity guard filters entries with no token
+  overlap between attached stream name and channel name (prevents poisoned index)
+- [x] `core/models.py` — added `MatchType.ATTACHMENT`
+- [x] Match priority: pairing store > attachment index > name strategy
+- [x] `tests/test_attachment_matching.py` — 9 tests including poisoned-index regression
+
+## Deduplication (completed out of phase, added during live testing)
+**Goal:** Find channels with the same normalized name, merge their streams onto one, delete the rest.
+
+- [x] `dedup/finder.py` — groups channels by normalized name; winner = most streams then lowest ID
+- [x] `dedup/merger.py` — PUT winner with merged streams, DELETE duplicates
+- [x] `--dedup` flag: dry-run shows groups; `--dedup --apply` executes
+- [x] `ui/console.py` — dedup group display and result output
+- [x] `tests/test_dedup.py` — 13 tests
+
+---
+
+## Phase 5 — Web UI (Visual Review)
+**Goal:** Local browser-based diff review and apply before committing changes.
+**Status:** Deferred — user wants to validate the tool further before building the web UI.
+
+**Dependencies:** `flask`, `flask-cors` (optional install: `pip install channelarr[web]`)
+
+### Tasks
+- [ ] `web/server.py` — Flask app factory with config injection
+- [ ] `web/routes.py`:
+  - `GET /api/diff` — runs planner, returns ChangeSet as JSON
+  - `POST /api/apply` — runs executor (requires `web.allow_apply: true` in config)
+  - `GET /api/history` — returns `history.jsonl` entries as JSON
+- [ ] `web/templates/index.html` — diff review table; Approve All / Apply Selected buttons
+- [ ] `web/templates/history.html` — paginated run history
+- [ ] `channelarr --web` or `channelarr serve` command in `utils/cli_args.py`
+- [ ] Config schema: `web.enabled`, `web.host`, `web.port`, `web.allow_apply`, `web.auto_open`
+- [ ] Server binds `127.0.0.1` by default; loud warning if `0.0.0.0` is configured
+- [ ] `pyproject.toml` optional dependency group `[web]`
+- [ ] `tests/test_web_routes.py` (uses Flask test client — no real HTTP):
+  - `GET /api/diff` → returns JSON with `creates`, `updates`, `skips` keys
+  - `POST /api/apply` with `web.allow_apply: false` → 403 forbidden
+  - `POST /api/apply` with `web.allow_apply: true` → calls executor, returns run summary
+  - `GET /api/history` → returns entries from `history.jsonl` as JSON array
+
+**Done when:**
+- `channelarr serve` starts local server
+- Browser shows pending diff with color coding
+- User can approve and apply from browser
+- History page shows past runs
+
+---
+
 ## Backlog / Future Ideas
 
 - Pagination support for Dispatcharr API (current hardcoded `page_size=2500` truncates large libraries)
