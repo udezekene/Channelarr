@@ -323,9 +323,25 @@ not just the channel name. More robust than name-only matching — survives chan
 
 ---
 
+## Phase 6 — Reliability & Scale
+**Goal:** Handle large Dispatcharr libraries safely. Current hardcoded `page_size=2500`
+will silently truncate libraries that exceed that count.
+
+### Tasks
+- [ ] `api/client.py` — add `get_all_pages(endpoint, params)` that follows pagination
+  (`next` field in API response) and returns a flat list of all results
+- [ ] `channelarr.py` — replace single-page stream and channel fetches with paginated fetch
+- [ ] Log total fetched vs total available so truncation is visible if it ever occurs
+- [ ] `tests/test_client.py` — add tests for paginated fetch (multi-page response, last page has `next: null`)
+
+**Done when:**
+- A library with 5000+ streams fetches all pages correctly
+- No streams or channels are silently dropped
+
+---
+
 ## Backlog / Future Ideas
 
-- Pagination support for Dispatcharr API (current hardcoded `page_size=2500` truncates large libraries)
 - `--dry-run` flag as an explicit alias (even though dry-run is already the default)
 - Export diff to JSON or CSV for external review
 - Scheduled runs via cron with email/webhook notifications
