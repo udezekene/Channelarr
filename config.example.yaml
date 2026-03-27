@@ -1,0 +1,95 @@
+# Channelarr configuration example
+# Copy this file to ~/.config/channelarr/config.yaml and fill in your values.
+# Run `python3 channelarr.py --reconfigure` to generate it interactively instead.
+
+# ── Connection ────────────────────────────────────────────────────────────────
+
+endpoint: "https://tv.example.com"   # your Dispatcharr URL, no trailing slash
+username: "admin"
+password: "changeme"
+
+# ── Matching ──────────────────────────────────────────────────────────────────
+
+matching:
+  # How to match stream names to channel names.
+  # regex   — normalise both names, then compare exactly (default; ports upstream behavior)
+  # exact   — case-insensitive exact string match, no normalization (Phase 4)
+  # fuzzy   — fuzzy match via rapidfuzz; respects fuzzy_threshold below (Phase 4)
+  strategy: "regex"
+
+  # How to normalise names before matching.
+  # default     — strips trailing/bracketed HD/SD/4K/FHD/UHD, trims whitespace
+  # aggressive  — also strips language/country codes and other noise (Phase 4)
+  # none        — no normalization, only whitespace trimming
+  normalizer: "default"
+
+  # Minimum similarity score for a fuzzy match (0.0–1.0). Only used when strategy=fuzzy.
+  fuzzy_threshold: 0.85
+
+# ── Provider priority ─────────────────────────────────────────────────────────
+# When multiple streams match the same channel, this determines which one "wins"
+# for metadata (tvg_id, logo, etc.) and stream ordering.
+# Lower rank number = higher priority.  Providers not listed are treated as lowest priority.
+
+provider_priority:
+  - name: "PrimaryProvider"
+    rank: 1
+  - name: "BackupProvider"
+    rank: 2
+
+# How to break ties when providers have equal (or no) priority.
+# highest_priority — use provider_priority ranks above
+# most_recent      — prefer the stream with the highest ID (most recently added)
+# first_match      — use whichever stream appeared first in the API response
+conflict_resolution:
+  strategy: "highest_priority"
+
+# ── Safety defaults ────────────────────────────────────────────────────────────
+# These are per-run defaults. Override for a single run with --allow-new-channels
+# or --allow-delete on the command line (changes are NOT persisted to this file).
+
+allow_new_channels_default: false   # if false, unmatched streams show as SKIP(CREATE_NOT_PERMITTED)
+allow_delete_default: false         # if false, deletions show as SKIP(DELETE_NOT_PERMITTED)
+
+# ── Locks ─────────────────────────────────────────────────────────────────────
+# Locked channels are never touched, even with --apply.
+# They appear in the diff as SKIP(LOCKED) so you can see they were evaluated.
+
+locks:
+  - channel_name: "BBC One"
+    reason: "Manually curated — do not overwrite"
+  # - channel_name: "CNN"
+  #   reason: "Managed by another script"
+
+# ── Allowlist ─────────────────────────────────────────────────────────────────
+# If non-empty, ONLY these channels are processed. Everything else is SKIP(NOT_IN_ALLOWLIST).
+# Useful for scoping a run to a subset of channels.
+# Leave empty (or omit) to process all channels.
+
+allowlist: []
+# allowlist:
+#   - "BBC One"
+#   - "CNN"
+
+# ── Blocklist ─────────────────────────────────────────────────────────────────
+# These channels are always skipped and shown as SKIP(BLOCKED) in the diff.
+
+blocklist: []
+# blocklist:
+#   - "Shopping Channel"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+logging:
+  log_file: "~/.local/share/channelarr/channelarr.log"
+  history_file: "~/.local/share/channelarr/history.jsonl"
+  level: "INFO"   # DEBUG | INFO | WARNING | ERROR
+
+# ── Web UI (Phase 5) ──────────────────────────────────────────────────────────
+
+web:
+  enabled: false
+  host: "127.0.0.1"   # WARNING: changing to 0.0.0.0 exposes the UI on your network
+  port: 5000
+  allow_apply: false  # must be explicitly true to allow applying changes from the browser
+  auto_open: false    # open the browser automatically when the server starts

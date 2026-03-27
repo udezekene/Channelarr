@@ -1,0 +1,130 @@
+"""All runtime dataclasses for Channelarr.
+
+Every other module imports its data types from here. No logic lives here — pure data only.
+"""
+
+from __future__ import annotations
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional, Any
+
+
+class ChangeType(Enum):
+    CREATE = "create"   # new channel will be created
+    UPDATE = "update"   # existing channel will have streams updated
+    DELETE = "delete"   # channel will be deleted (requires --allow-delete)
+    SKIP   = "skip"     # evaluated but will not be applied
+
+
+class SkipReason(Enum):
+    LOCKED               = "locked"
+    BLOCKED              = "blocked"
+    NOT_IN_ALLOWLIST     = "not_in_allowlist"
+    CREATE_NOT_PERMITTED = "create_not_permitted"
+    DELETE_NOT_PERMITTED = "delete_not_permitted"
+    NO_MATCH             = "no_match"
+    CONFLICT_UNRESOLVED  = "conflict_unresolved"
+    USER_SKIPPED         = "user_skipped"   # interactive mode
+
+
+class MatchType(Enum):
+    EXACT = "exact"
+    REGEX = "regex"
+    FUZZY = "fuzzy"
+    SAVED = "saved"     # match came from pairing store, not the live strategy
+    NONE  = "none"
+
+
+@dataclass
+class Stream:
+    id: int
+    name: str
+    provider: Optional[str]
+    channel_group: Optional[int]      # Dispatcharr channel_group FK; used for group-scoped matching
+    raw: dict[str, Any]               # original API dict; used when constructing PUT payloads
+
+
+@dataclass
+class Channel:
+    id: int
+    name: str
+    stream_ids: list[int]
+    channel_group_id: Optional[int]   # Dispatcharr channel_group FK
+    raw: dict[str, Any]
+
+
+@dataclass
+class StreamMatch:
+    stream: Stream
+    channel: Optional[Channel]
+    match_type: MatchType
+    score: float                        # 1.0 for exact/saved, 0.0–1.0 for fuzzy
+    normalized_stream_name: str
+    normalized_channel_name: Optional[str]
+
+
+@dataclass
+class ChannelChange:
+    change_type: ChangeType
+    channel: Optional[Channel]
+    winning_match: Optional[StreamMatch]
+    stream: Optional[Stream] = None     # None for DELETE changes (no stream triggered them)
+    candidates: list[StreamMatch] = field(default_factory=list)
+    skip_reason: Optional[SkipReason] = None
+    skip_detail: Optional[str] = None
+
+
+@dataclass
+class SavedPairing:
+    """A user-confirmed stream→channel pairing, persisted in pairings.json."""
+    normalized_stream_name: str
+    channel_group: Optional[int]        # stream's channel_group at time of confirmation
+    channel_id: int
+    channel_name: str
+    confirmed_at: str                   # ISO date string e.g. "2026-03-27"
+    active: bool = True                 # set False to disable without deleting
+    override_lock: bool = False         # True if this approval came from the pairing wizard for a locked channel
+
+
+@dataclass
+class ChangeSet:
+    changes: list[ChannelChange] = field(default_factory=list)
+
+    @property
+    def creates(self) -> list[ChannelChange]:
+        return [c for c in self.changes if c.change_type == ChangeType.CREATE]
+
+    @property
+    def updates(self) -> list[ChannelChange]:
+        return [c for c in self.changes if c.change_type == ChangeType.UPDATE]
+
+    @property
+    def deletes(self) -> list[ChannelChange]:
+        return [c for c in self.changes if c.change_type == ChangeType.DELETE]
+
+    @property
+    def skips(self) -> list[ChannelChange]:
+        return [c for c in self.changes if c.change_type == ChangeType.SKIP]
+
+
+@dataclass
+class AppliedChange:
+    change: ChannelChange
+    success: bool
+    api_response: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class RunResult:
+    applied: list[AppliedChange] = field(default_factory=list)
+    dry_run: bool = True
+    total_evaluated: int = 0
+
+    @property
+    def succeeded(self) -> list[AppliedChange]:
+        return [a for a in self.applied if a.success]
+
+    @property
+    def failed(self) -> list[AppliedChange]:
+        return [a for a in self.applied if not a.success]

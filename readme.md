@@ -1,208 +1,148 @@
-# Dispatcharr Group Channel Streams
+# Channelarr
 
-A Python tool for automatically grouping and organizing streaming channels in your Dispatcharr instance. This tool fetches all available streams from your Dispatcharr API, intelligently groups them by channel name, and creates or updates channel entries with multiple stream sources for redundancy and quality options.
+A safety-first channel and stream management tool for [Dispatcharr](https://github.com/dispatcharr/dispatcharr).
 
-## What it Does
+Channelarr is a fork of [dispatcharr-group-channel-streams](https://github.com/kpirnie/dispatcharr-group-channel-streams) by [kpirnie](https://github.com/kpirnie), extended with dry-run defaults, structured change previews, explicit commit controls, and richer channel management options.
 
-**Problem**: When you have multiple M3U sources in Dispatcharr, you often end up with duplicate channels (e.g., "ESPN HD", "ESPN SD", "ESPN") scattered across different providers. This makes channel management difficult and your channel list cluttered.
+---
 
-**Solution**: This tool automatically:
-- Fetches all streams from your Dispatcharr instance
-- Groups streams with similar names (using customizable regex normalization)
-- Creates unified channel entries that include all stream variants
-- Provides redundancy by linking multiple stream sources to each channel
-- Keeps your channel list clean and organized
+> **Legal notice:** Channelarr is intended for use exclusively with streaming sources you are legally licensed or entitled to access. This tool does not provide, distribute, or facilitate access to any streaming content — it is a management utility that organises streams already configured within your own Dispatcharr instance. The authors accept no liability for use of this tool with unlicensed, unauthorised, or infringing content sources. You are solely responsible for ensuring your sources comply with applicable copyright law and the terms of service of your content providers.
+
+---
+
+## The Core Difference
+
+The original tool applies changes immediately on first run. Channelarr does not.
+
+Every run is a **dry-run by default**. Channelarr shows you exactly what it plans to do — which channels would be updated, which streams would be assigned, what would be skipped and why — before anything is touched. Changes only happen when you pass `--apply`.
+
+---
+
+## What It Does
+
+Dispatcharr manages streams from multiple sources. When those sources carry the same channel under slightly different names (e.g. "BBC One", "BBC One HD", "BBC One FHD"), Channelarr groups them and assigns all variants to a single channel as ordered failover sources. If the primary stream goes down, the next one takes over automatically.
+
+Channelarr is designed for users who have a curated channel list they care about. It will not create new channels, delete anything, or overwrite your work unless you explicitly tell it to.
+
+---
 
 ## Features
 
-- **Intelligent Channel Grouping**: Automatically groups similar channels together
-- **Stream Redundancy**: Each channel can have multiple stream sources for failover
-- **Name Normalization**: Remove unwanted suffixes like "HD", "SD", etc. using regex
-- **M3U Refresh**: Optionally refresh all M3U sources before processing
-- **Configuration Management**: Save settings for easy reuse
-- **Retry Logic**: Built-in retry mechanisms for API calls
-- **Progress Tracking**: Clear feedback on operations being performed
+- **Dry-run by default** — nothing changes unless you pass `--apply`
+- **Structured diff preview** — see every proposed change before committing
+- **No auto-create** — new channels only appear if you pass `--allow-new-channels`
+- **No auto-delete** — deletions require `--allow-delete`
+- **Per-channel locks** — protect specific channels from ever being touched
+- **Allowlist / blocklist** — scope a run to specific channels, or exclude channels entirely
+- **Priority rules** — define which source is primary, secondary, etc. rather than relying on import order
+- **Pluggable matching** — exact, regex (default), or fuzzy matching configurable per run
+- **Interactive mode** — step through each proposed change and approve or skip individually
+- **Audit trail** — every run is logged; history is preserved across sessions
+- **YAML config** — all preferences in one file; CLI flags are per-run overrides only
+
+---
 
 ## Requirements
 
-- Python 3.6+
+- Python 3.10+
 - A running Dispatcharr instance
-- Valid Dispatcharr user account credentials
+- Valid Dispatcharr credentials
+
+---
 
 ## Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://gitlab.com/kp-development/python/dispatcharr-group-channel-streams.git
-   cd dispatcharr-group-channel-streams
-   ```
+```bash
+git clone https://github.com/udezekene/Channelarr.git
+cd Channelarr
+pip install pyyaml requests
+```
 
-2. **Install dependencies** (if any are added later):
-   ```bash
-   pip3 install -r requirements.txt
-   ```
-
-3. **Run the tool**:
-   ```bash
-   python3 main.py
-   ```
+---
 
 ## Quick Start
 
-### First Time Setup
-When you run the tool for the first time, it will prompt you for configuration:
+**First run** — Channelarr will prompt for your Dispatcharr URL and credentials and save them to `~/.config/channelarr/config.yaml`.
 
 ```bash
-python3 main.py
+python3 channelarr.py
 ```
 
-You'll be asked for:
-- **Dispatcharr URL**: Your Dispatcharr instance URL (e.g., `http://192.168.1.100:8080`)
-- **Username**: Your Dispatcharr username
-- **Password**: Your Dispatcharr password  
-- **Normalizer**: Optional regex pattern to clean channel names
+This is a dry-run. Nothing is changed. Review the proposed diff.
 
-### Example Configuration Session
-```
-Please enter the following info...
-Dispatcharr URL [http(s)://HOST:PORT]: http://192.168.1.100:8080
-Username: admin
-Password: ********
-Channel Name Normalizer RegExp (optional): \s(HD|SD|FHD|4K)$
-Configuration saved to /home/user/.config/.dgcs_conf
-```
+**Apply the changes:**
 
-## Usage
-
-### Basic Usage
 ```bash
-# Run with saved configuration
-python3 main.py
-
-# Run with M3U refresh (slower but ensures latest data)
-python3 main.py --refresh
+python3 channelarr.py --apply
 ```
 
-### Command Line Arguments
+**Also allow creation of new channels:**
 
-#### Configuration Arguments
 ```bash
-# Provide configuration via command line (will save to config file)
-python3 main.py --endpoint http://localhost:8080 --username admin --password mypassword
-
-# Add channel name normalizer
-python3 main.py --endpoint http://localhost:8080 --username admin --password mypassword --normalizer "\s(HD|SD)$"
+python3 channelarr.py --apply --allow-new-channels
 ```
 
-#### Operational Arguments
-```bash
-# Force M3U refresh before processing
-python3 main.py --refresh
+---
 
-# Reconfigure the application (prompts for new settings)
-python3 main.py --reconfigure
+## CLI Reference
+
+| Flag | Effect |
+|---|---|
+| *(no flags)* | Dry-run: plan, diff, no writes |
+| `--apply` | Commit the planned changes |
+| `--allow-new-channels` | Permit channel creation this run |
+| `--allow-delete` | Permit channel deletion this run |
+| `--config PATH` | Use a specific config file |
+| `--refresh` | Trigger a source refresh before fetching streams |
+| `--reconfigure` | Re-run the setup wizard |
+| `-i` / `--interactive` | Step through each proposed change for manual approval |
+| `--verbose` | Show all candidates and match scores |
+| `--quiet` | Show summary line only |
+| `--strategy NAME` | Override matching strategy: `regex` / `exact` / `fuzzy` |
+
+---
+
+## Configuration
+
+All preferences live in `~/.config/channelarr/config.yaml`. CLI flags override config values for a single run only — they do not persist.
+
+```yaml
+endpoint: "http://localhost:8080"
+username: "admin"
+password: "changeme"
+
+matching:
+  strategy: "regex"        # regex | exact | fuzzy
+  normalizer: "default"    # strips quality suffixes (HD, SD, 4K, etc.)
+  fuzzy_threshold: 0.85
+
+provider_priority:
+  - name: "ProviderA"
+    rank: 1                # lower = higher priority
+
+conflict_resolution:
+  strategy: "highest_priority"   # highest_priority | most_recent | first_match
+
+allow_new_channels_default: false
+allow_delete_default: false
+
+locks:
+  - channel_name: "BBC One"
+    reason: "Manually curated, do not touch"
+
+allowlist: []   # if non-empty, only process these channels
+blocklist: []   # never process or display these channels
 ```
 
-### All Available Arguments
+See `config.example.yaml` for a fully annotated version.
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| `--endpoint` | Value | Dispatcharr instance URL (e.g., `http://127.0.0.1:8080`) |
-| `--username` | Value | Dispatcharr username |
-| `--password` | Value | Dispatcharr password |
-| `--normalizer` | Value | Regex pattern to normalize channel names |
-| `--refresh` | Flag | Refresh all M3U sources before processing |
-| `--reconfigure` | Flag | Force reconfiguration of saved settings |
+---
 
-## Channel Name Normalization
+## Credits
 
-The normalizer helps clean up channel names by removing unwanted suffixes or prefixes. This ensures channels with slightly different names get grouped together.
+Channelarr is a fork of [dispatcharr-group-channel-streams](https://github.com/kpirnie/dispatcharr-group-channel-streams) by [kpirnie](https://github.com/kpirnie). The original tool provided the Dispatcharr API interaction pattern and channel grouping logic that Channelarr builds on.
 
-### Common Normalizer Patterns
-
-| Pattern | Removes | Example |
-|---------|---------|---------|
-| `\s(HD\|SD)$` | " HD" or " SD" at end | "ESPN HD" → "ESPN" |
-| `\s(FHD\|4K\|UHD)$` | High-res suffixes | "CNN 4K" → "CNN" |
-| `^\[.*?\]\s*` | Brackets at start | "[US] NBC" → "NBC" |
-| `\s-\s.*$` | Everything after " - " | "ESPN - Sports" → "ESPN" |
-
-### Complex Example
-```bash
-# Remove quality indicators and country prefixes
-python3 main.py --normalizer "^\[.*?\]\s*|\s(HD|SD|FHD|4K|UHD)$"
-```
-
-## Configuration File
-
-Settings are automatically saved to `~/.config/.dgcs_conf`:
-
-```ini
-[DEFAULT]
-API_ENDPOINT = http://192.168.1.100:8080
-API_USER = admin  
-API_PASS = mypassword
-NORMALIZER = \s(HD|SD)$
-```
-
-## How It Works
-
-1. **Authentication**: Connects to your Dispatcharr API using provided credentials
-2. **Stream Fetching**: Retrieves all available streams from all M3U sources
-3. **M3U Refresh** (optional): Triggers refresh of M3U sources for latest data
-4. **Name Normalization**: Applies regex pattern to clean channel names
-5. **Grouping**: Groups streams with matching normalized names
-6. **Channel Management**: Creates new channels or updates existing ones with grouped streams
-7. **Redundancy**: Each channel gets all matching streams as backup sources
-
-## Example Output
-
-```
-Starting channel creation...
-Triggering M3U account refresh...
-Waiting for M3U refresh to complete...
-M3U refresh complete, fetching streams...
-Fetching streams...
-Found 1247 streams
-Fetching channels...
-Found 89 channels
-Updated channel: ESPN
-4 Streams
-Created channel: Discovery Channel  
-2 Streams
-Updated channel: CNN
-3 Streams
-Successfully processed 156 channels
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Authentication Failed**
-- Verify your Dispatcharr URL is correct and accessible
-- Check username and password are correct
-- Ensure Dispatcharr API is enabled
-
-**No Streams Found**  
-- Run with `--refresh` flag to update M3U sources
-- Check that M3U sources are configured in Dispatcharr
-- Verify M3U URLs are accessible
-
-**Regex Errors**
-- Test your normalizer pattern with an online regex tester
-- Use double quotes around complex patterns
-- Escape special characters properly
-
-### Getting Help
-
-1. Run with `--reconfigure` to reset configuration
-2. Check Dispatcharr logs for API errors
-3. Ensure all M3U sources are working in Dispatcharr first
-
-## Contributing
-
-Issues and pull requests are welcome. Please ensure any changes maintain backward compatibility with existing configurations.
+---
 
 ## License
 
