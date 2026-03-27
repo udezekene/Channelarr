@@ -72,6 +72,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override matching strategy for this run (regex | exact | fuzzy)",
     )
     parser.add_argument(
+        "--dedup",
+        action="store_true",
+        help=(
+            "Find duplicate channels (same normalized name) and merge their streams. "
+            "Shows a dry-run diff by default; add --apply to commit."
+        ),
+    )
+    parser.add_argument(
         "--pair",
         action="store_true",
         help=(

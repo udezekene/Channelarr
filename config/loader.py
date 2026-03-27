@@ -60,6 +60,7 @@ def _parse(data: dict[str, Any]) -> Config:
         strategy=m.get("strategy", "regex"),
         normalizer=m.get("normalizer", "default"),
         fuzzy_threshold=float(m.get("fuzzy_threshold", 0.85)),
+        scope_to_group=bool(m.get("scope_to_group", False)),
     )
 
     provider_priority = [
@@ -117,6 +118,7 @@ def _serialise(config: Config) -> dict[str, Any]:
             "strategy": config.matching.strategy,
             "normalizer": config.matching.normalizer,
             "fuzzy_threshold": config.matching.fuzzy_threshold,
+            "scope_to_group": config.matching.scope_to_group,
         },
         "provider_priority": [
             {"name": p.name, "rank": p.rank} for p in config.provider_priority

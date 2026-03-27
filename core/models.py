@@ -28,11 +28,12 @@ class SkipReason(Enum):
 
 
 class MatchType(Enum):
-    EXACT = "exact"
-    REGEX = "regex"
-    FUZZY = "fuzzy"
-    SAVED = "saved"     # match came from pairing store, not the live strategy
-    NONE  = "none"
+    EXACT      = "exact"
+    REGEX      = "regex"
+    FUZZY      = "fuzzy"
+    SAVED      = "saved"       # match came from pairing store, not the live strategy
+    ATTACHMENT = "attachment"  # match came from a stream already attached to the channel
+    NONE       = "none"
 
 
 @dataclass
@@ -128,3 +129,15 @@ class RunResult:
     @property
     def failed(self) -> list[AppliedChange]:
         return [a for a in self.applied if not a.success]
+
+    @property
+    def actually_applied(self) -> list[AppliedChange]:
+        """Changes that were genuinely written to the API (not just recorded skips)."""
+        return [
+            a for a in self.applied
+            if a.success and a.change.change_type != ChangeType.SKIP
+        ]
+
+    @property
+    def skipped(self) -> list[AppliedChange]:
+        return [a for a in self.applied if a.change.change_type == ChangeType.SKIP]

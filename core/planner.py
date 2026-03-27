@@ -47,10 +47,15 @@ def plan(
     """
     channel_by_id = {c.id: c for c in channels}
 
+    # Build attachment index: normalized_stream_name → channel, derived from
+    # streams already attached to each channel in Dispatcharr.
+    # This is the primary match signal — more reliable than channel name comparison.
+    attachment_index = _build_attachment_index(streams, channels, config.matching.normalizer)
+
     # Step 1 + 2: match streams, group by channel
     matches: list[StreamMatch] = []
     for stream in streams:
-        match = _match_stream(stream, channels, config, strategy, pairing_store)
+        match = _match_stream(stream, channels, config, strategy, pairing_store, attachment_index)
         matches.append(match)
 
     groups: dict[str, list[StreamMatch]] = defaultdict(list)
@@ -116,18 +121,77 @@ def plan(
     return ChangeSet(changes=changes)
 
 
+def _build_attachment_index(
+    streams: list[Stream],
+    channels: list[Channel],
+    normalizer_mode: str,
+) -> dict[str, Channel]:
+    """Build a map of normalized_stream_name → channel from currently attached streams.
+
+    For every channel, resolve its stream_ids to Stream objects and normalize
+    each stream name. Any new stream whose normalized name appears in this index
+    belongs to that channel — regardless of what the channel itself is named.
+
+    Sanity guard: a stream is only added to the index if its normalized name
+    shares at least one meaningful token (length ≥ 2, non-numeric) with the
+    channel's own normalized name. This prevents a mis-assigned stream from a
+    previous bad run from poisoning the index and pulling unrelated streams onto
+    the wrong channel.
+    """
+    from core import normalizer as norm
+
+    stream_by_id = {s.id: s for s in streams}
+    index: dict[str, Channel] = {}
+
+    for channel in channels:
+        channel_normalized = norm.normalize(channel.name, normalizer_mode).lower()
+        channel_tokens = _meaningful_tokens(channel_normalized)
+
+        for stream_id in channel.stream_ids:
+            attached = stream_by_id.get(stream_id)
+            if not attached:
+                continue
+            stream_normalized = norm.normalize(attached.name, normalizer_mode)
+            if not stream_normalized:
+                continue
+            stream_tokens = _meaningful_tokens(stream_normalized.lower())
+
+            # Reject streams with no token overlap with the channel name —
+            # they were most likely mis-assigned in a previous run.
+            if stream_tokens & channel_tokens:
+                index[stream_normalized] = channel
+
+    return index
+
+
+def _meaningful_tokens(text: str) -> set[str]:
+    """Return the set of tokens that are at least 2 chars long and not purely numeric.
+
+    Filters out single characters and bare numbers (e.g. "7", "1") that would
+    create false-positive token overlaps between unrelated channel names.
+    """
+    return {t for t in text.split() if len(t) >= 2 and not t.isdigit()}
+
+
 def _match_stream(
     stream: Stream,
     channels: list[Channel],
     config: Config,
     strategy: MatchStrategy,
     pairing_store,
+    attachment_index: dict[str, Channel],
 ) -> StreamMatch:
-    """Check the pairing store first; fall through to the live strategy."""
+    """Match a stream to a channel using three lookups in priority order:
+
+    1. Pairing store  — user-confirmed pairings always win.
+    2. Attachment index — if the stream name already exists on a channel, use that.
+    3. Name strategy  — fall back to normalized name comparison (regex/exact/fuzzy).
+    """
     from core import normalizer as norm
 
     normalized = norm.normalize(stream.name, config.matching.normalizer)
 
+    # 1. Pairing store
     if pairing_store:
         saved = pairing_store.get(normalized, stream.channel_group)
         if saved:
@@ -144,4 +208,19 @@ def _match_stream(
                     ),
                 )
 
+    # 2. Attachment index
+    if normalized in attachment_index:
+        channel = attachment_index[normalized]
+        return StreamMatch(
+            stream=stream,
+            channel=channel,
+            match_type=MatchType.ATTACHMENT,
+            score=1.0,
+            normalized_stream_name=normalized,
+            normalized_channel_name=norm.normalize(
+                channel.name, config.matching.normalizer
+            ),
+        )
+
+    # 3. Name-based strategy
     return strategy.find_match(stream, channels)

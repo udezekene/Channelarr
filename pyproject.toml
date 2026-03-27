@@ -6,10 +6,10 @@ requires-python = ">=3.10"
 dependencies = [
     "requests>=2.28",
     "pyyaml>=6.0",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
-rich = ["rich>=13.0"]
 fuzzy = ["rapidfuzz>=3.0"]
 web = ["flask>=3.0", "flask-cors>=4.0"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0", "responses>=0.25", "mypy>=1.9", "ruff>=0.4"]

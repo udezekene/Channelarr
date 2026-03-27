@@ -3,13 +3,14 @@
 Wires all modules together and runs the pipeline:
     load config → load pairings → authenticate → fetch → plan
     → filter (lock → blocklist → allowlist) → diff
-    → [pairing wizard] → [apply]
+    → [interactive] → [pairing wizard] → [apply] → log
 
 Usage
 -----
     python3 channelarr.py                               # dry-run
     python3 channelarr.py --apply                       # commit changes
     python3 channelarr.py --apply --allow-new-channels  # also permit creation
+    python3 channelarr.py -i --apply                    # interactive approval then apply
     python3 channelarr.py --pair                        # review + confirm pairings
     python3 channelarr.py --unlock "BBC One" --apply    # one-run unlock
 """
@@ -25,27 +26,52 @@ from api.client import APIClient
 from api import endpoints
 from core.models import Stream, Channel
 from core import planner, executor
-from core.differ import format_diff
 from matching.regex_match import RegexMatchStrategy
+from matching.exact import ExactMatchStrategy
+from matching.fuzzy import FuzzyMatchStrategy
 from priority import resolver as priority_resolver
 from pairings.store import PairingStore
 from filters import lock as lock_filter
 from filters import blocklist as blocklist_filter
 from filters import allowlist as allowlist_filter
 from ui.pairing_wizard import run as run_wizard, has_pending
+from ui import console
+from ui import interactive
+from logging_ import run_logger, history as run_history
+from dedup import finder as dedup_finder
+from dedup.merger import apply_dedup
+
+
+def _build_strategy(config, strategy_override: str | None = None):
+    """Instantiate the correct matching strategy from config (or a CLI override)."""
+    name = strategy_override or config.matching.strategy
+    mode = config.matching.normalizer
+    scope = config.matching.scope_to_group
+
+    match name:
+        case "exact":
+            return ExactMatchStrategy(scope_to_group=scope)
+        case "fuzzy":
+            return FuzzyMatchStrategy(
+                normalizer_mode=mode,
+                scope_to_group=scope,
+                threshold=config.matching.fuzzy_threshold,
+            )
+        case _:  # "regex" or any unknown value
+            return RegexMatchStrategy(normalizer_mode=mode, scope_to_group=scope)
 
 
 def _graceful_exit(signum, frame):
-    print("\nOperation cancelled. Exiting.")
+    console.print_info("\nOperation cancelled. Exiting.")
     sys.exit(0)
 
 
 def _fetch_streams(client: APIClient, refresh: bool) -> list[Stream]:
     if refresh:
-        print("Triggering M3U refresh...")
+        console.print_info("Triggering M3U refresh...")
         client.post(endpoints.M3U_REFRESH)
         time.sleep(10)
-        print("Refresh complete.")
+        console.print_info("Refresh complete.")
 
     data = client.get(endpoints.STREAMS, params={"page_size": 2500})
     raw_list = data["results"] if isinstance(data, dict) and "results" in data else data
@@ -101,7 +127,7 @@ def main() -> None:
         try:
             config = loader.load(args.config)
         except FileNotFoundError:
-            print("No config found. Running setup wizard...")
+            console.print_info("No config found. Running setup wizard...")
             config = wizard.run(args.config)
 
     # CLI flags override config defaults for this run only — never persisted
@@ -119,31 +145,45 @@ def main() -> None:
     try:
         client.authenticate()
     except Exception as e:
-        print(f"Authentication failed: {e}")
+        console.print_error(f"Authentication failed: {e}")
         sys.exit(1)
 
     # ── fetch ─────────────────────────────────────────────────────────────────
-    print("Fetching streams...")
+    console.print_info("Fetching streams...")
     try:
         streams = _fetch_streams(client, args.refresh)
     except Exception as e:
-        print(f"Failed to fetch streams: {e}")
+        console.print_error(f"Failed to fetch streams: {e}")
         sys.exit(1)
-    print(f"  {len(streams)} streams found.")
+    console.print_info(f"  {len(streams)} streams found.")
 
-    print("Fetching channels...")
+    console.print_info("Fetching channels...")
     try:
         channels = _fetch_channels(client)
     except Exception as e:
-        print(f"Failed to fetch channels: {e}")
+        console.print_error(f"Failed to fetch channels: {e}")
         sys.exit(1)
-    print(f"  {len(channels)} channels found.")
+    console.print_info(f"  {len(channels)} channels found.")
+
+    # ── dedup path (separate from stream-matching pipeline) ───────────────────
+    if args.dedup:
+        groups = dedup_finder.find_groups(channels, config.matching.normalizer)
+        console.print_dedup_groups(groups)
+
+        if groups and args.apply:
+            console.print_info("\nMerging duplicates...")
+            result = apply_dedup(groups, client)
+            console.print_dedup_result(len(result.merged), len(result.failed))
+            for group, error in result.failed:
+                console.print_error(f"{group.normalized_name!r} — {error}")
+        elif groups:
+            console.print_info(
+                "[dim]Dry-run. Pass --apply to merge these groups.[/dim]"
+            )
+        return
 
     # ── strategy + resolver ───────────────────────────────────────────────────
-    strategy = RegexMatchStrategy(
-        normalizer_mode=config.matching.normalizer,
-        scope_to_group=config.matching.scope_to_group,
-    )
+    strategy = _build_strategy(config, strategy_override=args.strategy)
 
     # ── plan ──────────────────────────────────────────────────────────────────
     changeset = planner.plan(
@@ -163,10 +203,18 @@ def main() -> None:
     changeset = blocklist_filter.apply(changeset, config.blocklist)
     changeset = allowlist_filter.apply(changeset, config.allowlist)
 
-    # ── diff ──────────────────────────────────────────────────────────────────
-    if not args.quiet:
-        print()
-        print(format_diff(changeset))
+    # ── diff output ───────────────────────────────────────────────────────────
+    if args.quiet:
+        console.print_summary(changeset)
+    else:
+        console.print_diff(changeset, verbose=args.verbose)
+
+    # ── interactive mode ──────────────────────────────────────────────────────
+    if args.interactive:
+        changeset = interactive.run(changeset)
+        if not args.quiet:
+            console.print_info("[bold]After review:[/bold]")
+            console.print_summary(changeset)
 
     # ── pairing wizard ────────────────────────────────────────────────────────
     if args.pair or (not args.apply and has_pending(changeset)):
@@ -174,21 +222,27 @@ def main() -> None:
 
     # ── apply (executor is only ever called here) ─────────────────────────────
     if args.apply:
-        print("\nApplying changes...")
+        console.print_info("\nApplying changes...")
         result = executor.apply(changeset, client)
-        succeeded = len(result.succeeded)
-        failed = len(result.failed)
-        print(f"Done. {succeeded} succeeded, {failed} failed.")
-        if failed:
+        console.print_apply_result(
+            applied=len(result.actually_applied),
+            skipped=len(result.skipped),
+            failed=len(result.failed),
+        )
+
+        if result.failed:
             for applied in result.failed:
                 name = (
                     applied.change.stream.name if applied.change.stream
                     else applied.change.channel.name if applied.change.channel
                     else "unknown"
                 )
-                print(f"  FAILED: {name!r} — {applied.error}")
+                console.print_error(f"FAILED: {name!r} — {applied.error}")
+
+        run_history.append(run_logger.build_entry(changeset, result, dry_run=False))
     else:
-        print("\nDry-run complete. Pass --apply to commit these changes.")
+        console.print_info("\n[dim]Dry-run complete. Pass --apply to commit these changes.[/dim]")
+        run_history.append(run_logger.build_entry(changeset, None, dry_run=True))
 
 
 if __name__ == "__main__":

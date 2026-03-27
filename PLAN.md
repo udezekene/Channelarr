@@ -183,22 +183,22 @@ The lock list in config is never modified; the approval lives only in the pairin
 **Dependencies:** `rich`
 
 ### Tasks
-- [ ] `ui/console.py` — Rich diff tables: color-coded by ChangeType, summary line, SKIP reasons visible
-- [ ] Replace plain-text diff in `core/differ.py` with structured data that `ui/console.py` renders
-- [ ] `--verbose` mode: show all stream candidates per channel with match scores
-- [ ] `--quiet` mode: only show final summary line (N updated, N created, N skipped)
-- [ ] `logging_/run_logger.py` — JSON lines log: timestamp, streams evaluated, changes proposed, changes applied
-- [ ] `logging_/history.py` — appends run summary to `history.jsonl`; never rewrites existing entries
-- [ ] Wire logging into `core/executor.py` (log each applied/failed change)
-- [ ] `ui/interactive.py` — `--interactive` mode: Rich prompt per change, approve/skip/quit
-- [ ] `-i` / `--interactive` flag in `utils/cli_args.py`
-- [ ] `tests/test_config_loader.py`:
-  - Valid YAML with all fields → `Config` dataclass populated correctly
-  - Missing optional fields (locks, allowlist, blocklist) → defaults to empty lists
-  - Missing required field (endpoint) → raises clear error, not a raw `KeyError`
-  - Unknown field in YAML → ignored (forward compatibility)
-  - File not found → raises `FileNotFoundError` with helpful message pointing to `--reconfigure`
-  - `loader.write(config)` round-trips: write then read back → same values
+- [x] `ui/console.py` — Rich diff tables: color-coded by ChangeType, summary line, SKIP reasons visible
+- [x] Replace plain-text diff in `core/differ.py` with structured data that `ui/console.py` renders
+- [x] `--verbose` mode: show all stream candidates per channel with match scores
+- [x] `--quiet` mode: only show final summary line (N updated, N created, N skipped)
+- [x] `logging_/run_logger.py` — JSON lines log: timestamp, streams evaluated, changes proposed, changes applied
+- [x] `logging_/history.py` — appends run summary to `history.jsonl`; never rewrites existing entries
+- [x] Wire logging into `channelarr.py` (log each run after apply and after dry-run)
+- [x] `ui/interactive.py` — `--interactive` mode: Rich prompt per change, approve/skip/quit
+- [x] `-i` / `--interactive` flag in `utils/cli_args.py`
+- [x] `tests/test_config_loader.py`:
+  - [x] Valid YAML with all fields → `Config` dataclass populated correctly
+  - [x] Missing optional fields (locks, allowlist, blocklist) → defaults to empty lists
+  - [x] Missing required field (endpoint) → raises clear error, not a raw `KeyError`
+  - [x] Unknown field in YAML → ignored (forward compatibility)
+  - [x] File not found → raises `FileNotFoundError` with helpful message pointing to `--reconfigure`
+  - [x] `loader.write(config)` round-trips: write then read back → same values
 
 **Done when:**
 - Terminal output is a Rich-formatted table with color-coded change types
@@ -214,20 +214,20 @@ The lock list in config is never modified; the approval lives only in the pairin
 **Dependencies:** `rapidfuzz`
 
 ### Tasks
-- [ ] `matching/exact.py` — exact string match (case-insensitive option)
-- [ ] `matching/fuzzy.py` — fuzzy match via `rapidfuzz`; respects `fuzzy_threshold` from config
-- [ ] `core/normalizer.py` — add `aggressive` normalizer (strips language codes, country codes, brackets)
-- [ ] Strategy factory in `channelarr.py` — reads `config.matching.strategy`, instantiates correct class
-- [ ] `--strategy` CLI flag to override strategy for one run
-- [ ] `tests/test_matching.py`:
-  - Regex strategy: normalized names match → `StreamMatch` with `MatchType.REGEX`, score 1.0
-  - Regex strategy: names differ after normalization → no match
-  - Exact strategy: identical names → match; one character different → no match
-  - Exact strategy: case-insensitive option → `"cnn"` matches `"CNN"`
-  - Fuzzy strategy: score above threshold → match with correct score value
-  - Fuzzy strategy: score at exactly threshold → match (boundary inclusive)
-  - Fuzzy strategy: score below threshold → no match
-  - All three strategies: swapping strategy on same input changes outcome predictably (no shared state)
+- [x] `matching/exact.py` — exact string match (case-insensitive option)
+- [x] `matching/fuzzy.py` — fuzzy match via `rapidfuzz`; respects `fuzzy_threshold` from config
+- [x] `core/normalizer.py` — add `aggressive` normalizer (strips language codes, country codes, brackets)
+- [x] Strategy factory in `channelarr.py` — reads `config.matching.strategy`, instantiates correct class
+- [x] `--strategy` CLI flag to override strategy for one run
+- [x] `tests/test_matching.py`:
+  - [x] Regex strategy: normalized names match → `StreamMatch` with `MatchType.REGEX`, score 1.0
+  - [x] Regex strategy: names differ after normalization → no match
+  - [x] Exact strategy: identical names → match; one character different → no match
+  - [x] Exact strategy: case-insensitive option → `"cnn"` matches `"CNN"`
+  - [x] Fuzzy strategy: score above threshold → match with correct score value
+  - [x] Fuzzy strategy: score at exactly threshold → match (boundary inclusive)
+  - [x] Fuzzy strategy: score below threshold → no match
+  - [x] All three strategies: swapping strategy on same input changes outcome predictably (no shared state)
 
 **Done when:**
 - `matching.strategy: fuzzy` in config activates fuzzy matching
