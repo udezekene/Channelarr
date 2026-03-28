@@ -16,12 +16,6 @@ class MatchingConfig:
 
 
 @dataclass
-class ProviderPriority:
-    name: str
-    rank: int                       # lower number = higher priority
-
-
-@dataclass
 class ConflictResolutionConfig:
     strategy: str = "highest_priority"  # highest_priority | most_recent | first_match
 
@@ -66,7 +60,8 @@ class Config:
     username: str
     password: str
     matching: MatchingConfig = field(default_factory=MatchingConfig)
-    provider_priority: list[ProviderPriority] = field(default_factory=list)
+    provider_priority: list[str] = field(default_factory=list)  # M3U account names, first = highest priority
+    epg_min_confidence: float = 0.0  # minimum match confidence for --assign-epg (0.0 = show all, 0.8 = 80%+)
     conflict_resolution: ConflictResolutionConfig = field(default_factory=ConflictResolutionConfig)
     allow_new_channels_default: bool = False
     allow_delete_default: bool = False

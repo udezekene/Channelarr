@@ -25,6 +25,7 @@ class SkipReason(Enum):
     NO_MATCH             = "no_match"
     CONFLICT_UNRESOLVED  = "conflict_unresolved"
     USER_SKIPPED         = "user_skipped"   # interactive mode
+    ALREADY_CORRECT      = "already_correct"  # channel already has exactly the right streams
 
 
 class MatchType(Enum):
@@ -52,6 +53,24 @@ class Channel:
     stream_ids: list[int]
     channel_group_id: Optional[int]   # Dispatcharr channel_group FK
     raw: dict[str, Any]
+    epg_data_id: Optional[int] = None  # FK to EpgEntry; None = no EPG assigned
+    tvg_id: Optional[str] = None       # XMLTV channel ID string (e.g. "SABC1.za")
+
+
+@dataclass
+class EpgEntry:
+    id: int
+    tvg_id: str     # e.g. "SkySportsF1.uk"
+    name: str       # display name from XMLTV source, e.g. "UK-Sky Sports F1 HD"
+    epg_source: int  # FK to EPG source feed
+
+
+@dataclass
+class EpgProposal:
+    channel: Channel
+    epg_entry: EpgEntry
+    confidence: float  # 0.0–1.0
+    method: str        # "provider+suffix" | "provider" | "suffix" | "name_only"
 
 
 @dataclass
@@ -73,6 +92,19 @@ class ChannelChange:
     candidates: list[StreamMatch] = field(default_factory=list)
     skip_reason: Optional[SkipReason] = None
     skip_detail: Optional[str] = None
+
+
+@dataclass
+class AuditReport:
+    """Results of a --audit run, grouped by issue category."""
+    no_epg: list[Channel] = field(default_factory=list)           # epg_data_id is None
+    no_streams: list[Channel] = field(default_factory=list)        # stream_ids is empty
+    orphan_streams: list[Stream] = field(default_factory=list)     # stream not attached to any channel
+    stale_epg: list[Channel] = field(default_factory=list)         # epg_data_id points to a deleted EPG entry
+
+    @property
+    def is_clean(self) -> bool:
+        return not (self.no_epg or self.no_streams or self.orphan_streams or self.stale_epg)
 
 
 @dataclass
@@ -106,6 +138,11 @@ class ChangeSet:
     @property
     def skips(self) -> list[ChannelChange]:
         return [c for c in self.changes if c.change_type == ChangeType.SKIP]
+
+    @property
+    def already_correct(self) -> list[ChannelChange]:
+        return [c for c in self.changes
+                if c.skip_reason == SkipReason.ALREADY_CORRECT]
 
 
 @dataclass

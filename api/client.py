@@ -58,6 +58,51 @@ class APIClient:
     def get(self, path: str, params: dict | None = None) -> dict | list:
         return self._request("GET", path, params=params)
 
+    def get_all_pages(self, path: str, params: dict | None = None) -> tuple[list, int]:
+        """Fetch every page of a paginated endpoint and return (all_results, total_count).
+
+        Follows the `next` URL in each response until it is null.
+        total_count is the `count` field from the first page — use it to verify
+        nothing was silently dropped.
+        """
+        from urllib.parse import urlparse, parse_qs
+
+        results: list = []
+        total: int = 0
+        current_path: str = path
+        current_params: dict | None = params
+
+        while current_path:
+            data = self.get(current_path, params=current_params)
+
+            # Plain list response — not paginated, just return it directly
+            if isinstance(data, list):
+                results.extend(data)
+                total = total or len(data)
+                break
+
+            if not isinstance(data, dict):
+                break
+
+            if not total:
+                total = data.get("count", 0)
+
+            page_results = data.get("results", [])
+            if isinstance(page_results, list):
+                results.extend(page_results)
+
+            next_url: str | None = data.get("next")
+            if not next_url:
+                break
+
+            # `next` is an absolute URL — strip the base and re-parse query params
+            parsed = urlparse(next_url)
+            current_path = parsed.path
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            current_params = {k: v[0] for k, v in qs.items()}
+
+        return results, total
+
     def post(self, path: str, json: dict | None = None) -> dict:
         return self._request("POST", path, json=json)
 
@@ -66,6 +111,11 @@ class APIClient:
 
     def delete(self, path: str) -> None:
         self._request("DELETE", path)
+
+    def update_channel(self, channel_id: int, payload: dict) -> dict | None:
+        """PUT a channel by id. payload must be the full channel object (not partial)."""
+        from api import endpoints
+        return self._request("PUT", f"{endpoints.CHANNELS}{channel_id}/", json=payload)
 
     # --------------------------------------------------------------- private
 
@@ -95,6 +145,13 @@ class APIClient:
                         status_code=resp.status_code,
                         response_text=resp.text,
                     )
+
+                # Token expired — re-authenticate and retry once
+                if resp.status_code == 401 and auth and attempt < self.max_retries - 1:
+                    self._token = None
+                    self.authenticate()
+                    headers = self._auth_headers
+                    continue
 
                 if not resp.ok:
                     raise APIException(

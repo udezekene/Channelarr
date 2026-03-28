@@ -34,7 +34,7 @@ class TestLoad:
                 "fuzzy_threshold": 0.9,
                 "scope_to_group": True,
             },
-            "provider_priority": [{"name": "ProviderA", "rank": 1}],
+            "provider_priority": ["ProviderA", "ProviderB"],
             "conflict_resolution": {"strategy": "most_recent"},
             "allow_new_channels_default": True,
             "allow_delete_default": True,
@@ -50,7 +50,7 @@ class TestLoad:
         assert config.matching.strategy == "fuzzy"
         assert config.matching.fuzzy_threshold == 0.9
         assert config.matching.scope_to_group is True
-        assert config.provider_priority[0].name == "ProviderA"
+        assert config.provider_priority == ["ProviderA", "ProviderB"]
         assert config.conflict_resolution.strategy == "most_recent"
         assert config.allow_new_channels_default is True
         assert config.allow_delete_default is True

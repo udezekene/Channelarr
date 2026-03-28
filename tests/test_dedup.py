@@ -36,13 +36,13 @@ class TestFindGroups:
         ]
         groups = find_groups(channels)
         assert len(groups) == 1
-        assert groups[0].normalized_name == "dstv | ss la liga"
+        assert groups[0].normalized_name == "DStv | Ss La Liga"
 
     def test_unique_channels_not_flagged(self):
         channels = [
-            _channel(1, "CNN"),
+            _channel(1, "BBC News"),
             _channel(2, "BBC One"),
-            _channel(3, "ESPN"),
+            _channel(3, "Al Jazeera"),
         ]
         assert find_groups(channels) == []
 
@@ -83,9 +83,9 @@ class TestFindGroups:
 
     def test_three_way_duplicate(self):
         channels = [
-            _channel(1, "ESPN HD",  stream_ids=[1]),
-            _channel(2, "ESPN FHD", stream_ids=[2]),
-            _channel(3, "ESPN SD",  stream_ids=[3]),
+            _channel(1, "Al Jazeera HD",  stream_ids=[1]),
+            _channel(2, "Al Jazeera FHD", stream_ids=[2]),
+            _channel(3, "Al Jazeera SD",  stream_ids=[3]),
         ]
         groups = find_groups(channels)
         assert len(groups) == 1
@@ -99,7 +99,7 @@ class TestFindGroups:
         ]
         groups = find_groups(channels, normalizer_mode="aggressive")
         assert len(groups) == 1
-        assert groups[0].normalized_name == "premier sports"
+        assert groups[0].normalized_name == "Premier Sport"
 
     def test_multiple_independent_groups(self):
         channels = [
@@ -107,13 +107,13 @@ class TestFindGroups:
             _channel(2, "CNN FHD",     stream_ids=[2]),
             _channel(3, "BBC One HD",  stream_ids=[3]),
             _channel(4, "BBC One FHD", stream_ids=[4]),
-            _channel(5, "ESPN",        stream_ids=[5]),  # no duplicate
+            _channel(5, "Al Jazeera",  stream_ids=[5]),  # no duplicate
         ]
         groups = find_groups(channels)
         assert len(groups) == 2
         names = {g.normalized_name for g in groups}
-        assert "cnn" in names
-        assert "bbc one" in names
+        assert "CNN" in names
+        assert "BBC One" in names
 
 
 # ──────────────────────────────────────────────── merger

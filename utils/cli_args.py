@@ -72,20 +72,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override matching strategy for this run (regex | exact | fuzzy)",
     )
     parser.add_argument(
-        "--dedup",
-        action="store_true",
-        help=(
-            "Find duplicate channels (same normalized name) and merge their streams. "
-            "Shows a dry-run diff by default; add --apply to commit."
-        ),
-    )
-    parser.add_argument(
         "--cleanup",
         action="store_true",
         help=(
-            "Propose channel renames by stripping region/country prefixes "
-            "(e.g. 'SA|Rok' → 'Rok'). Dry-run by default; add --apply to commit."
+            "Clean up channels within each group: merge duplicates then rename "
+            "prefixed names (e.g. 'UK-CNN' → 'CNN'). Dry-run by default; "
+            "add --apply to commit."
         ),
+    )
+    parser.add_argument(
+        "--rename-only",
+        action="store_true",
+        dest="rename_only",
+        help="With --cleanup: skip duplicate merging, rename channels only.",
     )
     parser.add_argument(
         "--pair",
@@ -94,6 +93,69 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Run the pairing wizard after the diff — resolve ambiguous matches and "
             "approve locked channel changes. Selections are saved to the pairing store."
         ),
+    )
+    parser.add_argument(
+        "--debug-channel",
+        type=str,
+        dest="debug_channel",
+        metavar="NAME",
+        help="Show stream sort keys for a channel (case-insensitive substring match). Requires provider_priority to be set.",
+    )
+    parser.add_argument(
+        "--inspect-channel",
+        type=str,
+        dest="inspect_channel",
+        metavar="NAME",
+        help=(
+            "Dump the raw API response for a channel matching NAME (case-insensitive substring) and exit. "
+            "Use this to see exactly how Dispatcharr stores the streams field."
+        ),
+    )
+    parser.add_argument(
+        "--inspect-streams",
+        action="store_true",
+        dest="inspect_streams",
+        help=(
+            "Dump the raw API response for a sample of streams and exit. "
+            "Use this to discover what metadata Dispatcharr stores per stream."
+        ),
+    )
+    parser.add_argument(
+        "--inspect-count",
+        type=int,
+        default=3,
+        dest="inspect_count",
+        metavar="N",
+        help="Number of streams to inspect (default: 3). Used with --inspect-streams.",
+    )
+    parser.add_argument(
+        "--epg-min-confidence",
+        type=float,
+        default=None,
+        dest="epg_min_confidence",
+        metavar="FLOAT",
+        help=(
+            "Only show/apply EPG proposals at or above this confidence (0.0–1.0). "
+            "Overrides epg_min_confidence in config.yaml for this run. "
+            "Example: --epg-min-confidence 0.8"
+        ),
+    )
+    parser.add_argument(
+        "--assign-epg",
+        action="store_true",
+        dest="assign_epg",
+        help=(
+            "Propose EPG assignments for channels that have none. "
+            "Uses the channel's primary stream provider and group suffix pattern "
+            "to find the best match in Dispatcharr's EPG data. "
+            "Dry-run by default; add --apply to commit."
+        ),
+    )
+    parser.add_argument(
+        "--inspect-epg",
+        action="store_true",
+        dest="inspect_epg",
+        help="Probe Dispatcharr's EPG API and dump a sample of EPG channel entries.",
     )
     parser.add_argument(
         "--unlock",
@@ -105,6 +167,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Unlock a locked channel for this run only (not persisted). "
             "Repeat to unlock multiple: --unlock 'BBC One' --unlock 'CNN'"
         ),
+    )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help=(
+            "Scan your library for health issues: channels without EPG, "
+            "channels without streams, orphan streams, and stale EPG references. "
+            "Read-only. Respects --group / --group-id."
+        ),
+    )
+    parser.add_argument(
+        "--group",
+        type=str,
+        metavar="NAME",
+        help=(
+            "Scope this run to a single channel group by name "
+            "(e.g. --group 'Sports'). Works with --cleanup, --assign-epg, "
+            "and the main pipeline."
+        ),
+    )
+    parser.add_argument(
+        "--group-id",
+        type=int,
+        dest="group_id",
+        metavar="ID",
+        help="Scope this run to a single channel group by numeric ID.",
     )
 
     return parser.parse_args(argv)

@@ -12,13 +12,13 @@ class TestDefaultNormalizer:
         assert normalize("BBC One SD") == "BBC One"
 
     def test_strips_trailing_fhd(self):
-        assert normalize("Sky Sports FHD") == "Sky Sports"
+        assert normalize("BBC Two FHD") == "BBC Two"
 
     def test_strips_trailing_uhd(self):
-        assert normalize("Discovery UHD") == "Discovery"
+        assert normalize("Al Jazeera UHD") == "Al Jazeera"
 
     def test_strips_trailing_4k(self):
-        assert normalize("Netflix 4K") == "Netflix"
+        assert normalize("DW 4K") == "DW"
 
     def test_strips_multiple_trailing_tokens(self):
         assert normalize("ITV HD SD") == "ITV"
@@ -34,7 +34,7 @@ class TestDefaultNormalizer:
         assert normalize("4K Sport") == "4K Sport"
 
     def test_trims_whitespace(self):
-        assert normalize("   Sky News  ") == "Sky News"
+        assert normalize("   BBC News  ") == "BBC News"
 
     def test_empty_string_is_safe(self):
         assert normalize("") == ""

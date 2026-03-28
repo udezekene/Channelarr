@@ -90,3 +90,59 @@ class TestRetryBehavior:
         client = _client(max_retries=2, retry_delay=0)
         with pytest.raises(APIException):
             client.get("/api/channels/streams/")
+
+
+class TestPaginatedFetch:
+    @resp_lib.activate
+    def test_single_page_returns_all_results(self):
+        """When next is null, a single page is returned with the correct total."""
+        _mock_auth(resp_lib)
+        resp_lib.add(resp_lib.GET, STREAMS_URL, json={
+            "count": 2, "next": None, "results": [{"id": 1}, {"id": 2}]
+        }, status=200)
+        client = _client()
+        results, total = client.get_all_pages("/api/channels/streams/")
+        assert total == 2
+        assert len(results) == 2
+
+    @resp_lib.activate
+    def test_multi_page_follows_next_and_combines_results(self):
+        """Two pages are fetched and their results are combined into one list."""
+        _mock_auth(resp_lib)
+        resp_lib.add(resp_lib.GET, STREAMS_URL, json={
+            "count": 4,
+            "next": f"{BASE}/api/channels/streams/?page=2&page_size=2",
+            "results": [{"id": 1}, {"id": 2}],
+        }, status=200)
+        resp_lib.add(resp_lib.GET, STREAMS_URL, json={
+            "count": 4,
+            "next": None,
+            "results": [{"id": 3}, {"id": 4}],
+        }, status=200)
+        client = _client()
+        results, total = client.get_all_pages("/api/channels/streams/", params={"page_size": 2})
+        assert total == 4
+        assert [r["id"] for r in results] == [1, 2, 3, 4]
+
+    @resp_lib.activate
+    def test_plain_list_response_is_handled(self):
+        """If the endpoint returns a plain list (not paginated), it is returned as-is."""
+        _mock_auth(resp_lib)
+        resp_lib.add(resp_lib.GET, CHANNELS_URL,
+                     json=[{"id": 1}, {"id": 2}, {"id": 3}], status=200)
+        client = _client()
+        results, total = client.get_all_pages("/api/channels/channels/")
+        assert len(results) == 3
+        assert total == 3
+
+    @resp_lib.activate
+    def test_last_page_has_next_null(self):
+        """Pagination stops when next is null — no extra request is made."""
+        _mock_auth(resp_lib)
+        resp_lib.add(resp_lib.GET, CHANNELS_URL, json={
+            "count": 1, "next": None, "results": [{"id": 99}]
+        }, status=200)
+        client = _client()
+        results, total = client.get_all_pages("/api/channels/channels/")
+        assert len(results) == 1
+        assert len(resp_lib.calls) == 2  # 1 auth + 1 data call

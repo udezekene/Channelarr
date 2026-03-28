@@ -88,12 +88,15 @@ def plan(
         else:
             channel = group_matches[0].channel
             matched_channel_ids.add(channel.id)
+            proposed_ids = {m.stream.id for m in group_matches}
+            already_correct = proposed_ids == set(channel.stream_ids)
             changes.append(ChannelChange(
-                change_type=ChangeType.UPDATE,
+                change_type=ChangeType.SKIP if already_correct else ChangeType.UPDATE,
                 stream=winning.stream,
                 channel=channel,
                 winning_match=winning,
                 candidates=group_matches,
+                skip_reason=SkipReason.ALREADY_CORRECT if already_correct else None,
             ))
 
     # Step 5: channels with no matching streams

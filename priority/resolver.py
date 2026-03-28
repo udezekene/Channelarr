@@ -7,7 +7,7 @@ All candidates are still assigned to the channel; this just picks who leads.
 
 from __future__ import annotations
 from core.models import StreamMatch
-from config.schema import Config, ProviderPriority
+from config.schema import Config
 
 
 def resolve(candidates: list[StreamMatch], config: Config) -> StreamMatch | None:
@@ -28,13 +28,14 @@ def resolve(candidates: list[StreamMatch], config: Config) -> StreamMatch | None
 
 
 def _by_priority(
-    candidates: list[StreamMatch], provider_priority: list[ProviderPriority]
+    candidates: list[StreamMatch], provider_priority: list[str]
 ) -> StreamMatch:
-    priority_map = {p.name: p.rank for p in provider_priority}
+    # Build rank from list position — first entry = rank 1 (best)
+    priority_map = {name.lower(): i for i, name in enumerate(provider_priority)}
 
     def sort_key(m: StreamMatch) -> int:
         if m.stream.provider is None:
-            return 9999   # no provider = lowest priority
-        return priority_map.get(m.stream.provider, 9999)
+            return len(priority_map) + 1   # no provider = lowest priority
+        return priority_map.get(m.stream.provider.lower(), len(priority_map))
 
     return min(candidates, key=sort_key)

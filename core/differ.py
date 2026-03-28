@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from core.models import ChangeSet, ChangeType, StreamMatch
+from core.models import ChangeSet, ChangeType, SkipReason, StreamMatch
 
 
 @dataclass
@@ -19,10 +19,15 @@ class DiffRow:
     candidates: list[StreamMatch] = field(default_factory=list)
 
 
-def build_rows(changeset: ChangeSet) -> list[DiffRow]:
-    """Return one DiffRow per ChannelChange, preserving changeset order."""
+def build_rows(changeset: ChangeSet, verbose: bool = False) -> list[DiffRow]:
+    """Return one DiffRow per ChannelChange, preserving changeset order.
+
+    Already-correct channels are hidden unless verbose=True — they're noise.
+    """
     rows: list[DiffRow] = []
     for change in changeset.changes:
+        if not verbose and change.skip_reason == SkipReason.ALREADY_CORRECT:
+            continue
         if change.winning_match:
             name = change.winning_match.normalized_stream_name
         elif change.channel:

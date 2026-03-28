@@ -67,15 +67,15 @@ class TestAttachmentIndex:
     def test_attachment_beats_channel_name_mismatch(self):
         """Even when the stream name doesn't match the channel name after normalization,
         attachment wins because the stream is already there."""
-        # Channel is named "Premier League TV" — but the attached stream is
-        # "Region | Premier League TV". A new stream "Region | Premier League TV" from
+        # Channel is named "BBC Parliament" — but the attached stream is
+        # "Region | BBC Parliament". A new stream "Region | BBC Parliament" from
         # ProviderB should still find the right channel via attachment.
-        existing = _stream(id=1, name="Region | Premier League TV", provider="ProviderA")
-        new_provider_b  = _stream(id=2, name="Region | Premier League TV", provider="ProviderB")
-        channel  = _channel(id=10, name="Premier League TV", stream_ids=[1])
+        existing = _stream(id=1, name="Region | BBC Parliament", provider="ProviderA")
+        new_b  = _stream(id=2, name="Region | BBC Parliament", provider="ProviderB")
+        channel  = _channel(id=10, name="BBC Parliament", stream_ids=[1])
 
         strategy = RegexMatchStrategy()  # default normalizer — "Region | PLT" ≠ "PLT"
-        cs = planner.plan([existing, new_provider_b], [channel], _config(), strategy)
+        cs = planner.plan([existing, new_b], [channel], _config(), strategy)
 
         assert len(cs.updates) == 1
         assert cs.updates[0].channel == channel
@@ -85,11 +85,11 @@ class TestAttachmentIndex:
         """With the aggressive normalizer, 'Region | Channel X HD' and 'Channel X HD'
         both normalize to 'Channel X' and are grouped on the same channel."""
         existing = _stream(id=1, name="Region | Channel X HD", provider="ProviderA")
-        new_provider_b  = _stream(id=2, name="Channel X HD",      provider="ProviderB")
+        new_b  = _stream(id=2, name="Channel X HD",      provider="ProviderB")
         channel  = _channel(id=10, name="Channel X", stream_ids=[1])
 
         strategy = RegexMatchStrategy(normalizer_mode="aggressive")
-        cs = planner.plan([existing, new_provider_b], [channel], _config_aggressive(), strategy)
+        cs = planner.plan([existing, new_b], [channel], _config_aggressive(), strategy)
 
         assert len(cs.updates) == 1
         assert cs.updates[0].channel == channel
@@ -111,14 +111,14 @@ class TestAttachmentIndex:
     def test_poisoned_index_rejected_by_token_overlap_guard(self):
         """A mis-assigned stream from a previous bad run does NOT poison the index.
 
-        If 'UK-Sky Witness' was mistakenly attached to 'Now HK Premier Sports 7',
-        the token overlap guard ('uk-sky'/'witness' vs 'now'/'hk'/'premier'/'sports')
-        finds zero overlap and rejects that entry from the index. A new 'UK-Sky Witness'
+        If 'BBC Select' was mistakenly attached to 'HK Documentary Plus 7',
+        the token overlap guard ('bbc'/'select' vs 'hk'/'documentary'/'plus')
+        finds zero overlap and rejects that entry from the index. A new 'BBC Select'
         stream therefore does NOT get routed to the HK channel.
         """
-        bad_stream   = _stream(id=1, name="UK-Sky Witness", provider="ProviderA")   # mis-attached
-        new_stream   = _stream(id=2, name="UK-Sky Witness", provider="ProviderB")   # new stream
-        hk_channel   = _channel(id=10, name="Now HK Premier Sports 7", stream_ids=[1])
+        bad_stream   = _stream(id=1, name="BBC Select", provider="ProviderA")   # mis-attached
+        new_stream   = _stream(id=2, name="BBC Select", provider="ProviderB")   # new stream
+        hk_channel   = _channel(id=10, name="HK Documentary Plus 7", stream_ids=[1])
 
         strategy = RegexMatchStrategy()
         cs = planner.plan([bad_stream, new_stream], [hk_channel], _config(), strategy)
@@ -127,7 +127,7 @@ class TestAttachmentIndex:
         # (names don't match the channel name, so they should be CREATE or SKIP)
         for change in cs.updates:
             assert change.channel != hk_channel, (
-                "UK-Sky Witness should not be matched to Now HK Premier Sports 7"
+                "BBC Select should not be matched to HK Documentary Plus 7"
             )
 
     def test_stream_not_in_global_list_skipped_in_index(self):
@@ -147,9 +147,9 @@ class TestAttachmentIndex:
     def test_two_providers_same_channel_both_added(self):
         """Streams from two different providers that both normalize to the same name
         are grouped onto the same channel as multiple candidates."""
-        provider_a_stream = _stream(id=1, name="ESPN HD", provider="ProviderA")
-        provider_b_stream = _stream(id=2, name="ESPN HD", provider="ProviderB")
-        channel    = _channel(id=10, name="ESPN", stream_ids=[1])
+        provider_a_stream = _stream(id=1, name="DW News HD", provider="ProviderA")
+        provider_b_stream = _stream(id=2, name="DW News HD", provider="ProviderB")
+        channel    = _channel(id=10, name="DW News", stream_ids=[1])
 
         strategy = RegexMatchStrategy()
         cs = planner.plan([provider_a_stream, provider_b_stream], [channel], _config(), strategy)

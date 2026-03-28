@@ -29,13 +29,13 @@ matching:
 # ── Provider priority ─────────────────────────────────────────────────────────
 # When multiple streams match the same channel, this determines which one "wins"
 # for metadata (tvg_id, logo, etc.) and stream ordering.
-# Lower rank number = higher priority.  Providers not listed are treated as lowest priority.
+# List your M3U account names in order — first entry = highest priority.
+# Use the exact account name as it appears in Dispatcharr → M3U Accounts.
+# Providers not listed are treated as lowest priority.
 
 provider_priority:
-  - name: "PrimaryProvider"
-    rank: 1
-  - name: "BackupProvider"
-    rank: 2
+  - "PrimaryProvider"
+  - "BackupProvider"
 
 # How to break ties when providers have equal (or no) priority.
 # highest_priority — use provider_priority ranks above

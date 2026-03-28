@@ -29,16 +29,16 @@ class TestFindRenames:
     def test_conflict_excluded(self):
         """If the proposed clean name already exists as a channel, skip it."""
         channels = [
-            _channel(1, "MY|CNN"),
-            _channel(2, "CNN"),   # already exists — would conflict
+            _channel(1, "MY|DW"),
+            _channel(2, "DW"),   # already exists — would conflict
         ]
         proposals = find_renames(channels)
         assert len(proposals) == 0
 
     def test_conflict_check_is_case_insensitive(self):
         channels = [
-            _channel(1, "MY|Cnn"),
-            _channel(2, "CNN"),
+            _channel(1, "MY|Dw"),
+            _channel(2, "DW"),
         ]
         proposals = find_renames(channels)
         assert len(proposals) == 0
@@ -46,31 +46,31 @@ class TestFindRenames:
     def test_multiple_proposals_no_conflicts(self):
         channels = [
             _channel(1, "SA|Rok"),
-            _channel(2, "MY|CNN"),
+            _channel(2, "MY|DW"),
             _channel(3, "UK|BBC One"),
         ]
         proposals = find_renames(channels)
         assert len(proposals) == 3
         proposed_names = {p.proposed_name for p in proposals}
-        assert proposed_names == {"Rok", "CNN", "BBC One"}
+        assert proposed_names == {"Rok", "DW", "BBC One"}
 
     def test_proposal_has_correct_channel_reference(self):
-        ch = _channel(42, "MY|ESPN")
+        ch = _channel(42, "MY|Al Jazeera")
         proposals = find_renames([ch])
         assert proposals[0].channel is ch
-        assert proposals[0].current_name == "MY|ESPN"
+        assert proposals[0].current_name == "MY|Al Jazeera"
 
     def test_two_prefixed_channels_no_conflict_with_each_other(self):
         """Two prefixed channels normalizing to different names — both proposed."""
         channels = [
-            _channel(1, "MY|ESPN"),
-            _channel(2, "UK|ESPN"),
+            _channel(1, "MY|Al Jazeera"),
+            _channel(2, "UK|Al Jazeera"),
         ]
         proposals = find_renames(channels)
-        # Both normalize to "ESPN" — second would conflict with first's proposal
+        # Both normalize to "Al Jazeera" — second would conflict with first's proposal
         # but the first's proposed name doesn't exist yet as a current channel name
         # Both CURRENT names differ, so no current-name conflict
-        # However both propose "ESPN" — the second proposal would create a conflict
+        # However both propose "Al Jazeera" — the second proposal would create a conflict
         # Our implementation only checks current channel names, not proposed names
         # So both will be proposed; user must review
         assert len(proposals) == 2
@@ -80,19 +80,19 @@ class TestFindRenames:
 
 class TestApplyRenames:
     def test_successful_rename(self):
-        ch = _channel(1, "MY|CNN")
-        proposal = RenameProposal(channel=ch, current_name="MY|CNN", proposed_name="CNN")
+        ch = _channel(1, "MY|DW")
+        proposal = RenameProposal(channel=ch, current_name="MY|DW", proposed_name="DW")
         client = MagicMock()
 
         succeeded, failed = apply_renames([proposal], client)
 
         assert len(succeeded) == 1
         assert len(failed) == 0
-        client.update_channel.assert_called_once_with(1, {"name": "CNN"})
+        client.update_channel.assert_called_once_with(1, {"name": "DW"})
 
     def test_failed_rename(self):
-        ch = _channel(1, "MY|CNN")
-        proposal = RenameProposal(channel=ch, current_name="MY|CNN", proposed_name="CNN")
+        ch = _channel(1, "MY|DW")
+        proposal = RenameProposal(channel=ch, current_name="MY|DW", proposed_name="DW")
         client = MagicMock()
         client.update_channel.side_effect = RuntimeError("API error")
 
@@ -103,9 +103,9 @@ class TestApplyRenames:
         assert "API error" in failed[0][1]
 
     def test_partial_failure(self):
-        ch1 = _channel(1, "MY|CNN")
+        ch1 = _channel(1, "MY|DW")
         ch2 = _channel(2, "SA|Rok")
-        p1 = RenameProposal(channel=ch1, current_name="MY|CNN", proposed_name="CNN")
+        p1 = RenameProposal(channel=ch1, current_name="MY|DW", proposed_name="DW")
         p2 = RenameProposal(channel=ch2, current_name="SA|Rok", proposed_name="Rok")
 
         client = MagicMock()
@@ -114,7 +114,7 @@ class TestApplyRenames:
         succeeded, failed = apply_renames([p1, p2], client)
 
         assert len(succeeded) == 1
-        assert succeeded[0].proposed_name == "CNN"
+        assert succeeded[0].proposed_name == "DW"
         assert len(failed) == 1
         assert failed[0][0].proposed_name == "Rok"
 

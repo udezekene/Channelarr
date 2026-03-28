@@ -11,6 +11,8 @@ from __future__ import annotations
 from core.models import ChangeSet, ChangeType, AppliedChange, RunResult, ChannelChange
 from api.client import APIClient
 from api import endpoints
+from core import normalizer as norm
+from core.brands import apply_brands
 
 
 def apply(changeset: ChangeSet, client: APIClient) -> RunResult:
@@ -44,8 +46,10 @@ def apply(changeset: ChangeSet, client: APIClient) -> RunResult:
 def _do_update(change: ChannelChange, client: APIClient) -> None:
     assert change.channel is not None
     stream_ids = [m.stream.id for m in change.candidates]
-    # Merge into .raw so we preserve any API fields added in future Dispatcharr versions
-    payload = {**change.channel.raw, "streams": stream_ids}
+    # Re-apply brand casing on every update so Dispatcharr M3U refreshes can't
+    # silently revert manually-set channel names back to raw M3U naming.
+    clean_name = apply_brands(norm.normalize(change.channel.name, "aggressive"))
+    payload = {**change.channel.raw, "streams": stream_ids, "name": clean_name}
     client.put(f"{endpoints.CHANNELS}{change.channel.id}/", json=payload)
 
 

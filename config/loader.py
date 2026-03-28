@@ -10,7 +10,6 @@ import yaml
 from config.schema import (
     Config,
     MatchingConfig,
-    ProviderPriority,
     ConflictResolutionConfig,
     LockConfig,
     GroupRegion,
@@ -65,8 +64,7 @@ def _parse(data: dict[str, Any]) -> Config:
     )
 
     provider_priority = [
-        ProviderPriority(name=p["name"], rank=int(p["rank"]))
-        for p in data.get("provider_priority", [])
+        str(p) for p in data.get("provider_priority", [])
     ]
 
     cr = data.get("conflict_resolution", {})
@@ -130,9 +128,7 @@ def _serialise(config: Config) -> dict[str, Any]:
             "fuzzy_threshold": config.matching.fuzzy_threshold,
             "scope_to_group": config.matching.scope_to_group,
         },
-        "provider_priority": [
-            {"name": p.name, "rank": p.rank} for p in config.provider_priority
-        ],
+        "provider_priority": config.provider_priority,
         "conflict_resolution": {"strategy": config.conflict_resolution.strategy},
         "allow_new_channels_default": config.allow_new_channels_default,
         "allow_delete_default": config.allow_delete_default,

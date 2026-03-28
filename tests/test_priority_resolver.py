@@ -2,7 +2,7 @@
 
 import pytest
 from core.models import StreamMatch, MatchType
-from config.schema import Config, ProviderPriority, ConflictResolutionConfig
+from config.schema import Config, ConflictResolutionConfig
 from priority.resolver import resolve
 
 
@@ -25,26 +25,23 @@ def _config(strategy="highest_priority", providers=None) -> Config:
 
 
 class TestHighestPriority:
-    def test_ranked_provider_wins(self):
+    def test_first_listed_provider_wins(self):
         m1 = _make_match(1, "ProviderA")
         m2 = _make_match(2, "ProviderB")
-        cfg = _config(providers=[
-            ProviderPriority(name="ProviderA", rank=1),
-            ProviderPriority(name="ProviderB", rank=2),
-        ])
+        cfg = _config(providers=["ProviderA", "ProviderB"])
         assert resolve([m1, m2], cfg) == m1
         assert resolve([m2, m1], cfg) == m1   # order-independent
 
-    def test_unranked_provider_loses_to_ranked(self):
-        ranked = _make_match(1, "ProviderA")
-        unranked = _make_match(2, "ProviderX")
-        cfg = _config(providers=[ProviderPriority(name="ProviderA", rank=1)])
-        assert resolve([unranked, ranked], cfg) == ranked
+    def test_unlisted_provider_loses_to_listed(self):
+        listed = _make_match(1, "ProviderA")
+        unlisted = _make_match(2, "ProviderX")
+        cfg = _config(providers=["ProviderA"])
+        assert resolve([unlisted, listed], cfg) == listed
 
     def test_none_provider_treated_as_lowest(self):
         good = _make_match(1, "ProviderA")
         no_provider = _make_match(2, None)
-        cfg = _config(providers=[ProviderPriority(name="ProviderA", rank=1)])
+        cfg = _config(providers=["ProviderA"])
         assert resolve([no_provider, good], cfg) == good
 
 
