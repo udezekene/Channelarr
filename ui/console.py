@@ -84,14 +84,22 @@ def print_apply_result(applied: int, skipped: int, failed: int) -> None:
 
 def print_dedup_groups(groups: list) -> None:
     """Display duplicate channel groups before a dedup apply."""
-    from dedup.finder import DedupGroup
     if not groups:
         _console.print("[dim]No duplicate channels found.[/dim]")
         return
 
-    _console.print(f"\nFound [bold]{len(groups)}[/bold] duplicate channel group(s):\n")
+    auto = [g for g in groups if g.confidence == "auto"]
+    review = [g for g in groups if g.confidence == "review"]
+
+    _console.print(f"\nFound [bold]{len(groups)}[/bold] duplicate channel group(s):"
+                   f"  [green]{len(auto)} auto[/green]  [yellow]{len(review)} need review[/yellow]\n")
+
     for group in groups:
-        _console.print(f"  [bold]{group.normalized_name}[/bold]")
+        confidence_tag = (
+            "[green][auto][/green]" if group.confidence == "auto"
+            else "[yellow][review][/yellow]"
+        )
+        _console.print(f"  {confidence_tag} [bold]{group.normalized_name}[/bold]")
         _console.print(
             f"    [green]KEEP [/green]  [{group.winner.id}] {group.winner.name}"
             f"  [dim]({len(group.winner.stream_ids)} stream(s))[/dim]"
@@ -114,6 +122,35 @@ def print_dedup_result(merged: int, failed: int) -> None:
         parts.append(f"[red]{failed} failed[/red]")
     if not parts:
         parts.append("[dim]nothing to merge[/dim]")
+    _console.print("  " + "  ·  ".join(parts))
+
+
+def print_rename_proposals(proposals: list) -> None:
+    """Display channel rename proposals before a --cleanup apply."""
+    if not proposals:
+        _console.print("[dim]No channel renames needed.[/dim]")
+        return
+
+    _console.print(f"\nFound [bold]{len(proposals)}[/bold] channel(s) to rename:\n")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold", padding=(0, 1))
+    table.add_column("ID", width=6, no_wrap=True)
+    table.add_column("CURRENT NAME")
+    table.add_column("PROPOSED NAME", style="cyan")
+
+    for p in proposals:
+        table.add_row(str(p.channel.id), p.current_name, p.proposed_name)
+
+    _console.print(table)
+
+
+def print_rename_result(succeeded: int, failed: int) -> None:
+    parts: list[str] = []
+    if succeeded:
+        parts.append(f"[green]{succeeded} renamed[/green]")
+    if failed:
+        parts.append(f"[red]{failed} failed[/red]")
+    if not parts:
+        parts.append("[dim]nothing to rename[/dim]")
     _console.print("  " + "  ·  ".join(parts))
 
 

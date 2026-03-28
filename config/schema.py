@@ -33,6 +33,18 @@ class LockConfig:
 
 
 @dataclass
+class GroupRegion:
+    """Maps a logical region/country name to a set of Dispatcharr channel_group IDs.
+
+    When configured, streams from the same region are considered compatible for
+    attachment matching. Streams from different regions with the same normalized
+    name (e.g. MY|CNN and UK|CNN) are kept separate.
+    """
+    name: str
+    groups: list[int] = field(default_factory=list)
+
+
+@dataclass
 class LoggingConfig:
     log_file: str = "~/.local/share/channelarr/channelarr.log"
     history_file: str = "~/.local/share/channelarr/history.jsonl"
@@ -59,6 +71,7 @@ class Config:
     allow_new_channels_default: bool = False
     allow_delete_default: bool = False
     locks: list[LockConfig] = field(default_factory=list)
+    group_regions: list[GroupRegion] = field(default_factory=list)
     allowlist: list[str] = field(default_factory=list)
     blocklist: list[str] = field(default_factory=list)
     logging: LoggingConfig = field(default_factory=LoggingConfig)

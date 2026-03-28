@@ -13,6 +13,7 @@ from config.schema import (
     ProviderPriority,
     ConflictResolutionConfig,
     LockConfig,
+    GroupRegion,
     LoggingConfig,
     WebConfig,
 )
@@ -76,6 +77,14 @@ def _parse(data: dict[str, Any]) -> Config:
         for lock in data.get("locks", [])
     ]
 
+    group_regions = [
+        GroupRegion(
+            name=r["name"],
+            groups=[int(g) for g in r.get("groups", [])],
+        )
+        for r in data.get("group_regions", [])
+    ]
+
     lg = data.get("logging", {})
     logging_cfg = LoggingConfig(
         log_file=lg.get("log_file", "~/.local/share/channelarr/channelarr.log"),
@@ -102,6 +111,7 @@ def _parse(data: dict[str, Any]) -> Config:
         allow_new_channels_default=bool(data.get("allow_new_channels_default", False)),
         allow_delete_default=bool(data.get("allow_delete_default", False)),
         locks=locks,
+        group_regions=group_regions,
         allowlist=list(data.get("allowlist", [])),
         blocklist=list(data.get("blocklist", [])),
         logging=logging_cfg,
@@ -129,6 +139,10 @@ def _serialise(config: Config) -> dict[str, Any]:
         "locks": [
             {"channel_name": lock.channel_name, "reason": lock.reason}
             for lock in config.locks
+        ],
+        "group_regions": [
+            {"name": r.name, "groups": r.groups}
+            for r in config.group_regions
         ],
         "allowlist": config.allowlist,
         "blocklist": config.blocklist,

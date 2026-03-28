@@ -51,6 +51,24 @@ conflict_resolution:
 allow_new_channels_default: false   # if false, unmatched streams show as SKIP(CREATE_NOT_PERMITTED)
 allow_delete_default: false         # if false, deletions show as SKIP(DELETE_NOT_PERMITTED)
 
+# ── Group Regions ─────────────────────────────────────────────────────────────
+# Maps logical region/country names to Dispatcharr channel_group IDs.
+# When configured, attachment matching only routes a stream to a channel if the
+# stream's channel_group is in the same region as the channel's attached streams.
+# This prevents MY|CNN and UK|CNN from being treated as duplicates.
+#
+# Find your channel_group IDs in Dispatcharr → Channel Groups.
+# Leave empty (or omit) to disable region-aware matching.
+
+group_regions: []
+# group_regions:
+#   - name: "MY"
+#     groups: [1, 2, 3]     # channel_group IDs for Malaysian streams
+#   - name: "UK"
+#     groups: [4, 5]        # channel_group IDs for UK streams
+#   - name: "US"
+#     groups: [6, 7, 8]
+
 # ── Locks ─────────────────────────────────────────────────────────────────────
 # Locked channels are never touched, even with --apply.
 # They appear in the diff as SKIP(LOCKED) so you can see they were evaluated.

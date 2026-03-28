@@ -80,6 +80,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help=(
+            "Propose channel renames by stripping region/country prefixes "
+            "(e.g. 'SA|Rok' → 'Rok'). Dry-run by default; add --apply to commit."
+        ),
+    )
+    parser.add_argument(
         "--pair",
         action="store_true",
         help=(

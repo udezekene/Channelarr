@@ -125,27 +125,39 @@ def _build_attachment_index(
     streams: list[Stream],
     channels: list[Channel],
     normalizer_mode: str,
-) -> dict[str, Channel]:
-    """Build a map of normalized_stream_name → channel from currently attached streams.
+) -> dict[str, list[tuple[Channel, frozenset]]]:
+    """Build a map of normalized_stream_name → [(channel, attached_groups), ...].
 
-    For every channel, resolve its stream_ids to Stream objects and normalize
-    each stream name. Any new stream whose normalized name appears in this index
-    belongs to that channel — regardless of what the channel itself is named.
+    For every channel, resolve its stream_ids to Stream objects, normalize each
+    stream name, and record which channel_group IDs those attached streams belong to.
 
-    Sanity guard: a stream is only added to the index if its normalized name
-    shares at least one meaningful token (length ≥ 2, non-numeric) with the
-    channel's own normalized name. This prevents a mis-assigned stream from a
-    previous bad run from poisoning the index and pulling unrelated streams onto
-    the wrong channel.
+    A new stream matches a channel via this index when:
+      - Its normalized name appears as a key, AND
+      - Its channel_group is compatible with the channel's attached_groups
+        (checked in _match_stream using group_regions config).
+
+    Multiple channels can legitimately share the same normalized key if they
+    serve different regions (e.g. MY|CNN and UK|CNN both normalize to "CNN").
+
+    Sanity guard: entries with no token overlap between the stream name and the
+    channel name are rejected — guards against poisoned index from bad past runs.
     """
     from core import normalizer as norm
 
     stream_by_id = {s.id: s for s in streams}
-    index: dict[str, Channel] = {}
+    # normalized_name → list of (channel, frozenset of channel_groups)
+    index: dict[str, list[tuple[Channel, frozenset]]] = {}
 
     for channel in channels:
         channel_normalized = norm.normalize(channel.name, normalizer_mode).lower()
         channel_tokens = _meaningful_tokens(channel_normalized)
+
+        # Collect channel_group IDs from all attached streams
+        attached_groups: set[int] = {
+            s.channel_group
+            for sid in channel.stream_ids
+            if (s := stream_by_id.get(sid)) and s.channel_group is not None
+        }
 
         for stream_id in channel.stream_ids:
             attached = stream_by_id.get(stream_id)
@@ -156,10 +168,12 @@ def _build_attachment_index(
                 continue
             stream_tokens = _meaningful_tokens(stream_normalized.lower())
 
-            # Reject streams with no token overlap with the channel name —
-            # they were most likely mis-assigned in a previous run.
-            if stream_tokens & channel_tokens:
-                index[stream_normalized] = channel
+            if not (stream_tokens & channel_tokens):
+                continue  # token overlap guard
+
+            entries = index.setdefault(stream_normalized, [])
+            if not any(c.id == channel.id for c, _ in entries):
+                entries.append((channel, frozenset(attached_groups)))
 
     return index
 
@@ -167,10 +181,13 @@ def _build_attachment_index(
 def _meaningful_tokens(text: str) -> set[str]:
     """Return the set of tokens that are at least 2 chars long and not purely numeric.
 
-    Filters out single characters and bare numbers (e.g. "7", "1") that would
-    create false-positive token overlaps between unrelated channel names.
+    Splits on whitespace AND common channel-name separators (|, :, -, –) so that
+    'MY|CNN' and 'CNN HD' share the token 'cnn'. Filters out single characters
+    and bare numbers (e.g. "7", "1") that would create false-positive overlaps.
     """
-    return {t for t in text.split() if len(t) >= 2 and not t.isdigit()}
+    import re
+    raw_tokens = re.split(r'[\s|:\-–]+', text)
+    return {t for t in raw_tokens if len(t) >= 2 and not t.isdigit()}
 
 
 def _match_stream(
@@ -179,7 +196,7 @@ def _match_stream(
     config: Config,
     strategy: MatchStrategy,
     pairing_store,
-    attachment_index: dict[str, Channel],
+    attachment_index: dict[str, list[tuple[Channel, frozenset]]],
 ) -> StreamMatch:
     """Match a stream to a channel using three lookups in priority order:
 
@@ -208,19 +225,74 @@ def _match_stream(
                     ),
                 )
 
-    # 2. Attachment index
-    if normalized in attachment_index:
-        channel = attachment_index[normalized]
-        return StreamMatch(
-            stream=stream,
-            channel=channel,
-            match_type=MatchType.ATTACHMENT,
-            score=1.0,
-            normalized_stream_name=normalized,
-            normalized_channel_name=norm.normalize(
-                channel.name, config.matching.normalizer
-            ),
-        )
+    # 2. Attachment index — pick the entry whose groups are compatible with this stream
+    entries = attachment_index.get(normalized)
+    if entries:
+        channel = _find_compatible_channel(entries, stream.channel_group, config)
+        if channel:
+            return StreamMatch(
+                stream=stream,
+                channel=channel,
+                match_type=MatchType.ATTACHMENT,
+                score=1.0,
+                normalized_stream_name=normalized,
+                normalized_channel_name=norm.normalize(
+                    channel.name, config.matching.normalizer
+                ),
+            )
 
     # 3. Name-based strategy
     return strategy.find_match(stream, channels)
+
+
+def _find_compatible_channel(
+    entries: list[tuple[Channel, frozenset]],
+    stream_group: int | None,
+    config: Config,
+) -> Channel | None:
+    """Return the first channel whose attached groups are compatible with stream_group.
+
+    If group_regions is not configured, or the stream has no group, any entry matches
+    (fall back to first entry — original single-channel behaviour).
+    """
+    if not config.group_regions or stream_group is None:
+        return entries[0][0]
+
+    for channel, attached_groups in entries:
+        if _groups_compatible(stream_group, attached_groups, config.group_regions):
+            return channel
+
+    # No compatible entry found — don't match via attachment
+    return None
+
+
+def _groups_compatible(
+    stream_group: int,
+    attached_groups: frozenset,
+    group_regions: list,
+) -> bool:
+    """Return True if stream_group and any member of attached_groups share a region.
+
+    Two groups are compatible when they appear together in the same GroupRegion entry.
+    If attached_groups is empty (channel had no group info), allow the match — we have
+    no evidence of incompatibility.
+    """
+    if not attached_groups:
+        return True
+
+    # Find which regions contain the stream's group
+    stream_regions = {
+        r.name for r in group_regions if stream_group in r.groups
+    }
+
+    if not stream_regions:
+        # Stream's group not in any configured region — can't confirm compatibility,
+        # but also can't confirm incompatibility; allow the match
+        return True
+
+    for ag in attached_groups:
+        ag_regions = {r.name for r in group_regions if ag in r.groups}
+        if stream_regions & ag_regions:
+            return True
+
+    return False

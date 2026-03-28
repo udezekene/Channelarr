@@ -40,6 +40,7 @@ from ui import interactive
 from logging_ import run_logger, history as run_history
 from dedup import finder as dedup_finder
 from dedup.merger import apply_dedup
+from cleanup.renamer import find_renames, apply_renames
 
 
 def _build_strategy(config, strategy_override: str | None = None):
@@ -164,6 +165,23 @@ def main() -> None:
         console.print_error(f"Failed to fetch channels: {e}")
         sys.exit(1)
     console.print_info(f"  {len(channels)} channels found.")
+
+    # ── cleanup path: propose channel renames ─────────────────────────────────
+    if args.cleanup:
+        proposals = find_renames(channels)
+        console.print_rename_proposals(proposals)
+
+        if proposals and args.apply:
+            console.print_info("\nRenaming channels...")
+            succeeded, failed = apply_renames(proposals, client)
+            console.print_rename_result(len(succeeded), len(failed))
+            for proposal, error in failed:
+                console.print_error(f"{proposal.current_name!r} — {error}")
+        elif proposals:
+            console.print_info(
+                "[dim]Dry-run. Pass --apply to rename these channels.[/dim]"
+            )
+        return
 
     # ── dedup path (separate from stream-matching pipeline) ───────────────────
     if args.dedup:

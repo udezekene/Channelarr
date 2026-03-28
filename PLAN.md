@@ -273,21 +273,47 @@ The lock list in config is never modified; the approval lives only in the pairin
 **Goal:** Use streams already attached to a channel as the primary match signal,
 not just the channel name. More robust than name-only matching — survives channel renames.
 
-- [x] `core/planner.py` — `_build_attachment_index`: maps `normalized_stream_name → channel`
+- [x] `core/planner.py` — `_build_attachment_index`: maps `normalized_stream_name → list[(channel, attached_groups)]`
   from each channel's current `stream_ids`; sanity guard filters entries with no token
-  overlap between attached stream name and channel name (prevents poisoned index)
+  overlap between attached stream name and channel name (prevents poisoned index);
+  token splitting updated to also split on `|`, `:`, `-` so "MY|CNN" and "CNN HD" share the `cnn` token
 - [x] `core/models.py` — added `MatchType.ATTACHMENT`
 - [x] Match priority: pairing store > attachment index > name strategy
 - [x] `tests/test_attachment_matching.py` — 9 tests including poisoned-index regression
 
+## Group-Aware Attachment Matching (completed out of phase)
+**Goal:** Prevent streams from one region (e.g. MY|CNN) matching a channel in another region
+(UK|CNN) via the attachment index. Both channels share the same normalized stream name — they
+must be disambiguated by the channel_group of the attached streams.
+
+- [x] `config/schema.py` — added `GroupRegion` dataclass; added `group_regions: list[GroupRegion]` to `Config`
+- [x] `config/loader.py` — parse and serialise `group_regions`; also fixed missing `scope_to_group` in parse/serialise
+- [x] `core/planner.py` — `_build_attachment_index` now stores `list[tuple[Channel, frozenset]]` (groups per entry);
+  `_match_stream` calls `_find_compatible_channel()` which uses `_groups_compatible()` to pick the right channel
+- [x] `config.example.yaml` — added `group_regions` section with examples
+- [x] `tests/test_group_regions.py` — 8 tests: unit tests for helpers + planner integration
+
 ## Deduplication (completed out of phase, added during live testing)
 **Goal:** Find channels with the same normalized name, merge their streams onto one, delete the rest.
 
-- [x] `dedup/finder.py` — groups channels by normalized name; winner = most streams then lowest ID
+- [x] `dedup/finder.py` — groups channels by normalized name; winner = most streams then lowest ID;
+  `confidence` field: `"auto"` if all losers have ≤1 stream, `"review"` otherwise
 - [x] `dedup/merger.py` — PUT winner with merged streams, DELETE duplicates
 - [x] `--dedup` flag: dry-run shows groups; `--dedup --apply` executes
-- [x] `ui/console.py` — dedup group display and result output
-- [x] `tests/test_dedup.py` — 13 tests
+- [x] `ui/console.py` — dedup group display with auto/review confidence counts and tags; result output
+- [x] `tests/test_dedup.py` — 13 tests (+ 3 confidence tests in `test_cleanup.py`)
+
+## Channel Cleanup / Rename (completed out of phase)
+**Goal:** Strip region/country prefixes from channel names (e.g. "SA|Rok" → "Rok", "MY|CNN" → "CNN")
+with conflict detection to avoid creating name collisions.
+
+- [x] `cleanup/__init__.py`
+- [x] `cleanup/renamer.py` — `find_renames()`: applies aggressive normalizer, excludes proposals that
+  would conflict with an existing channel name (case-insensitive); `apply_renames()`: PATCH via API
+- [x] `--cleanup` flag in `utils/cli_args.py`
+- [x] `channelarr.py` — `--cleanup` path wired before main pipeline; dry-run shows proposals table
+- [x] `ui/console.py` — `print_rename_proposals()` (Rich table), `print_rename_result()`
+- [x] `tests/test_cleanup.py` — 12 tests: find_renames, apply_renames, dedup confidence
 
 ---
 

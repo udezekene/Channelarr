@@ -20,6 +20,7 @@ class DedupGroup:
     winner: Channel              # channel to keep; receives all combined streams
     duplicates: list[Channel]    # channels to delete after the merge
     merged_stream_ids: list[int] # deduplicated union of all stream_ids, winner's first
+    confidence: str = "review"   # "auto" if all losers have ≤1 stream; "review" otherwise
 
 
 def find_groups(
@@ -45,12 +46,14 @@ def find_groups(
         winner = _pick_winner(bucket)
         duplicates = [c for c in bucket if c.id != winner.id]
         merged = _merge_stream_ids(winner, duplicates)
+        confidence = "auto" if all(len(d.stream_ids) <= 1 for d in duplicates) else "review"
 
         groups.append(DedupGroup(
             normalized_name=normalized_name,
             winner=winner,
             duplicates=duplicates,
             merged_stream_ids=merged,
+            confidence=confidence,
         ))
 
     return groups
