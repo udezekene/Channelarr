@@ -1,100 +1,106 @@
-# Channelarr configuration example
-# Copy this file to ~/.config/channelarr/config.yaml and fill in your values.
-# Run `python3 channelarr.py --reconfigure` to generate it interactively instead.
+# Channelarr — example config
+# Copy to ~/.config/channelarr/config.yaml and fill in your values.
+# Or run: python3 channelarr.py --reconfigure
 
 # ── Connection ────────────────────────────────────────────────────────────────
 
-endpoint: "https://tv.example.com"   # your Dispatcharr URL, no trailing slash
+endpoint: "https://dispatcharr.example.com"   # no trailing slash
 username: "admin"
 password: "changeme"
 
 # ── Matching ──────────────────────────────────────────────────────────────────
 
 matching:
-  # How to match stream names to channel names.
-  # regex   — normalise both names, then compare exactly (default; ports upstream behavior)
-  # exact   — case-insensitive exact string match, no normalization (Phase 4)
-  # fuzzy   — fuzzy match via rapidfuzz; respects fuzzy_threshold below (Phase 4)
+  # How streams are matched to channels:
+  #   regex  — normalise names, then compare (default)
+  #   exact  — case-insensitive exact match, no normalisation
+  #   fuzzy  — similarity match; tune with fuzzy_threshold below
   strategy: "regex"
 
-  # How to normalise names before matching.
-  # default     — strips trailing/bracketed HD/SD/4K/FHD/UHD, trims whitespace
-  # aggressive  — also strips language/country codes and other noise (Phase 4)
-  # none        — no normalization, only whitespace trimming
+  # How names are cleaned before matching:
+  #   default     — strips trailing HD/SD/4K/FHD/UHD and brackets
+  #   aggressive  — also strips language/country prefixes and other noise
+  #   none        — no cleaning, whitespace trim only
   normalizer: "default"
 
-  # Minimum similarity score for a fuzzy match (0.0–1.0). Only used when strategy=fuzzy.
+  # Minimum similarity score for fuzzy matching (0.0–1.0). Ignored unless strategy=fuzzy.
   fuzzy_threshold: 0.85
 
+  # Set true to only match streams to channels in the same Dispatcharr channel group.
+  # Prevents streams from one region matching channels in another.
+  scope_to_group: false
+
 # ── Provider priority ─────────────────────────────────────────────────────────
-# When multiple streams match the same channel, this determines which one "wins"
-# for metadata (tvg_id, logo, etc.) and stream ordering.
-# List your M3U account names in order — first entry = highest priority.
-# Use the exact account name as it appears in Dispatcharr → M3U Accounts.
-# Providers not listed are treated as lowest priority.
+# When multiple streams match the same channel, this decides which one wins.
+# List your M3U account names in priority order (highest first).
+# Use the exact name from Dispatcharr → M3U Accounts.
+# Unlisted providers are treated as lowest priority.
 
 provider_priority:
   - "PrimaryProvider"
   - "BackupProvider"
 
-# How to break ties when providers have equal (or no) priority.
-# highest_priority — use provider_priority ranks above
-# most_recent      — prefer the stream with the highest ID (most recently added)
-# first_match      — use whichever stream appeared first in the API response
+# Tiebreaker when providers have equal (or no) priority:
+#   highest_priority — use the ranking above
+#   most_recent      — prefer the stream with the highest ID
+#   first_match      — use whichever appeared first in the API response
 conflict_resolution:
   strategy: "highest_priority"
 
-# ── Safety defaults ────────────────────────────────────────────────────────────
-# These are per-run defaults. Override for a single run with --allow-new-channels
-# or --allow-delete on the command line (changes are NOT persisted to this file).
+# ── Safety defaults ───────────────────────────────────────────────────────────
+# Both are false by default — Channelarr won't create or delete anything unless told to.
+# Override for a single run with --allow-new-channels or --allow-delete.
 
-allow_new_channels_default: false   # if false, unmatched streams show as SKIP(CREATE_NOT_PERMITTED)
-allow_delete_default: false         # if false, deletions show as SKIP(DELETE_NOT_PERMITTED)
+allow_new_channels_default: false   # true = unmatched streams create new channels
+allow_delete_default: false         # true = channels with no streams are deleted
 
-# ── Group Regions ─────────────────────────────────────────────────────────────
-# Maps logical region/country names to Dispatcharr channel_group IDs.
-# When configured, attachment matching only routes a stream to a channel if the
-# stream's channel_group is in the same region as the channel's attached streams.
-# This prevents MY|CNN and UK|CNN from being treated as duplicates.
+# ── Group regions ─────────────────────────────────────────────────────────────
+# Tells Channelarr which Dispatcharr channel groups belong to the same region.
+# When set, a stream from region MY won't be matched to a channel in region UK,
+# even if their names are identical (e.g. MY|CNN vs UK|CNN).
 #
-# Find your channel_group IDs in Dispatcharr → Channel Groups.
-# Leave empty (or omit) to disable region-aware matching.
+# Find your group IDs in Dispatcharr → Channel Groups.
+# Leave as [] to disable region-aware matching.
 
 group_regions: []
 # group_regions:
 #   - name: "MY"
-#     groups: [1, 2, 3]     # channel_group IDs for Malaysian streams
+#     groups: [1, 2, 3]
 #   - name: "UK"
-#     groups: [4, 5]        # channel_group IDs for UK streams
-#   - name: "US"
-#     groups: [6, 7, 8]
+#     groups: [4, 5]
 
 # ── Locks ─────────────────────────────────────────────────────────────────────
-# Locked channels are never touched, even with --apply.
-# They appear in the diff as SKIP(LOCKED) so you can see they were evaluated.
+# Locked channels are never modified, even with --apply.
+# They show as SKIP(LOCKED) in the diff so you know they were evaluated.
+# To override a lock for one run: --unlock "Channel Name"
 
-locks:
-  - channel_name: "BBC One"
-    reason: "Manually curated — do not overwrite"
-  # - channel_name: "CNN"
-  #   reason: "Managed by another script"
+locks: []
+# locks:
+#   - channel_name: "BBC One"
+#     reason: "Manually curated"
 
 # ── Allowlist ─────────────────────────────────────────────────────────────────
-# If non-empty, ONLY these channels are processed. Everything else is SKIP(NOT_IN_ALLOWLIST).
-# Useful for scoping a run to a subset of channels.
-# Leave empty (or omit) to process all channels.
+# Process only these channels — everything else is skipped.
+# Leave as [] to process all channels.
 
 allowlist: []
 # allowlist:
 #   - "BBC One"
-#   - "CNN"
+#   - "BBC Two"
 
 # ── Blocklist ─────────────────────────────────────────────────────────────────
-# These channels are always skipped and shown as SKIP(BLOCKED) in the diff.
+# These channels are always ignored. They won't appear in the diff at all.
 
 blocklist: []
 # blocklist:
 #   - "Shopping Channel"
+
+# ── EPG ───────────────────────────────────────────────────────────────────────
+# Minimum confidence for --assign-epg proposals (0.0–1.0).
+# Proposals below this threshold are hidden. 0.0 = show everything.
+# Override for a single run with --epg-min-confidence 0.8
+
+epg_min_confidence: 0.0
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -102,12 +108,3 @@ logging:
   log_file: "~/.local/share/channelarr/channelarr.log"
   history_file: "~/.local/share/channelarr/history.jsonl"
   level: "INFO"   # DEBUG | INFO | WARNING | ERROR
-
-# ── Web UI (Phase 5) ──────────────────────────────────────────────────────────
-
-web:
-  enabled: false
-  host: "127.0.0.1"   # WARNING: changing to 0.0.0.0 exposes the UI on your network
-  port: 5000
-  allow_apply: false  # must be explicitly true to allow applying changes from the browser
-  auto_open: false    # open the browser automatically when the server starts
