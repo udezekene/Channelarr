@@ -39,3 +39,9 @@ Thumbs.db
 
 # Temporary files
 *~
+
+# Claude Code working files
+.claude/
+CLAUDE.md
+AGENTS.md
+PLAN.md
